@@ -13,7 +13,7 @@ logging.basicConfig(
     format="[%(asctime)s - %(levelname)s] - %(funcName)s() - Line %(lineno)d: %(name)s - %(message)s",
     datefmt="%d-%b-%y %I:%M:%S %p",
     handlers=[
-        RotatingFileHandler("logs.txt", mode="w+", maxBytes=5000000, backupCount=10),
+        RotatingFileHandler("logs.txt", mode="w+", maxBytes=5000000, backupCount=5),
         logging.StreamHandler(),
     ],
 )
