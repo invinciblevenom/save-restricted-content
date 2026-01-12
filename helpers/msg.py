@@ -1,6 +1,3 @@
-# Copyright (C) @TheSmartBisnu
-# Channel: https://t.me/itsSmartDev
-
 from pyrogram.parser import Parser
 from pyrogram.utils import get_channel_id
 

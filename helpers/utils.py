@@ -1,6 +1,3 @@
-# Copyright (C) @TheSmartBisnu
-# Channel: https://t.me/itsSmartDev
-
 import os
 import asyncio
 from time import time

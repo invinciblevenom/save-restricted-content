@@ -1,12 +1,9 @@
-# Copyright (C) @TheSmartBisnu
-# Channel: https://t.me/itsSmartDev
-
 import os
 from typing import Optional
 
 from logger import LOGGER
 
-SIZE_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"]
+SIZE_UNITS = ["B", "KB", "MB", "GB"]
 
 def get_download_path(folder_id: int, filename: str, root_dir: str = "downloads") -> str:
     folder = os.path.join(root_dir, str(folder_id))

@@ -1,6 +1,3 @@
-# Copyright (C) @TheSmartBisnu
-# Channel: https://t.me/itsSmartDev
-
 import os
 import shutil
 import psutil
@@ -72,7 +69,7 @@ def track_task(coro):
 @bot.on_message(filters.command("start") & filters.private)
 async def start(_, message: Message):
     welcome_text = (
-        "👋 **Welcome to Media Downloader Bot!**\n\n"
+        "👋 **Welcome to Save Restricted Content Bot!**\n\n"
         "I can grab photos, videos, audio, and documents from any Telegram post.\n"
         "Just send me a link (paste it directly or use `/dl <link>`),\n"
         "or reply to a message with `/dl`.\n\n"
@@ -105,9 +102,6 @@ async def help_command(_, message: Message):
         "   – Send `/logs` to download the bot’s logs file.\n\n"
         "➤ **Stats**\n"
         "   – Send `/stats` to view current status:\n\n"
-        "**Example**:\n"
-        "  • `/dl https://t.me/itsSmartDev/547`\n"
-        "  • `https://t.me/itsSmartDev/547`"
     )
     
     markup = InlineKeyboardMarkup(
