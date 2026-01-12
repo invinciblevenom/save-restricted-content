@@ -1,6 +1,7 @@
 Pyrofork
 TgCrypto
 Pyleaves
-python-dotenv
 psutil
 pillow
+ffmpeg
+pyrogram
