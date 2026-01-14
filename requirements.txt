@@ -4,4 +4,3 @@ Pyleaves
 psutil
 pillow
 ffmpeg
-pyrogram
