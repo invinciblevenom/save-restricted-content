@@ -78,9 +78,6 @@ async def start(_, message: Message):
         "Ready? Send me a Telegram post link!"
     )
 
-    markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Update Channel", url="https://t.me/itsSmartDev")]]
-    )
     await message.reply(welcome_text, reply_markup=markup, disable_web_page_preview=True)
 
 
@@ -91,22 +88,19 @@ async def help_command(_, message: Message):
         "➤ **Download Media**\n"
         "   – Send `/dl <post_URL>` **or** just paste a Telegram post link to fetch photos, videos, audio, or documents.\n\n"
         "➤ **Batch Download**\n"
-        "   – Send `/bdl start_link end_link` to grab a series of posts in one go.\n"
-        "     💡 Example: `/bdl https://t.me/mychannel/100 https://t.me/mychannel/120`\n"
+        "   – Send `/batch start_link end_link` to grab a series of posts in one go.\n"
+        "     💡 Example: `/batch https://t.me/mychannel/100 https://t.me/mychannel/120`\n"
         "**It will download all posts from ID 100 to 120.**\n\n"
         "➤ **Requirements**\n"
         "   – Make sure the user client is part of the chat.\n\n"
         "➤ **If the bot hangs**\n"
-        "   – Send `/killall` to cancel any pending downloads.\n\n"
+        "   – Send `/stop` to cancel any pending downloads.\n\n"
         "➤ **Logs**\n"
         "   – Send `/logs` to download the bot’s logs file.\n\n"
         "➤ **Stats**\n"
         "   – Send `/stats` to view current status:\n\n"
     )
     
-    markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Update Channel", url="https://t.me/itsSmartDev")]]
-    )
     await message.reply(help_text, reply_markup=markup, disable_web_page_preview=True)
 
 
@@ -221,16 +215,16 @@ async def download_media(bot: Client, message: Message):
     await track_task(handle_download(bot, message, post_url))
 
 
-@bot.on_message(filters.command("bdl") & filters.private)
+@bot.on_message(filters.command("batch") & filters.private)
 async def download_range(bot: Client, message: Message):
     args = message.text.split()
 
     if len(args) != 3 or not all(arg.startswith("https://t.me/") for arg in args[1:]):
         await message.reply(
             "🚀 **Batch Download Process**\n"
-            "`/bdl start_link end_link`\n\n"
+            "`/batch start_link end_link`\n\n"
             "💡 **Example:**\n"
-            "`/bdl https://t.me/mychannel/100 https://t.me/mychannel/120`"
+            "`/batch https://t.me/mychannel/100 https://t.me/mychannel/120`"
         )
         return
 
@@ -313,7 +307,7 @@ async def download_range(bot: Client, message: Message):
     )
 
 
-@bot.on_message(filters.private & ~filters.command(["start", "help", "dl", "stats", "logs", "killall"]))
+@bot.on_message(filters.private & ~filters.command(["start", "help", "dl", "stats", "logs", "stop"]))
 async def handle_any_message(bot: Client, message: Message):
     if message.text and not message.text.startswith("/"):
         await track_task(handle_download(bot, message, message.text))
@@ -357,7 +351,7 @@ async def logs(_, message: Message):
         await message.reply("**Not exists**")
 
 
-@bot.on_message(filters.command("killall") & filters.private)
+@bot.on_message(filters.command("stop") & filters.private)
 async def cancel_all_tasks(_, message: Message):
     cancelled = 0
     for task in list(RUNNING_TASKS):

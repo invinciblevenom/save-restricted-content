@@ -32,10 +32,10 @@ WIP
 - **`/start`** – Welcomes you and gives a brief introduction.  
 - **`/help`** – Shows detailed instructions and examples.  
 - **`/dl <post_URL>`** or simply paste a Telegram post link – Fetch photos, videos, audio, or documents from that post.  
-- **`/bdl <start_link> <end_link>`** – Batch-download a range of posts in one go.  
+- **`/batch <start_link> <end_link>`** – Batch-download a range of posts in one go.  
 
-  > 💡 Example: `/bdl https://t.me/mychannel/100 https://t.me/mychannel/120`  
-- **`/killall`** – Cancel any pending downloads if the bot hangs.  
+  > 💡 Example: `/batch https://t.me/mychannel/100 https://t.me/mychannel/120`  
+- **`/stop`** – Stop all pending downloads if the bot hangs.  
 - **`/logs`** – Download the bot’s logs file.  
 - **`/stats`** – View current status (uptime, disk, memory, network, CPU, etc.).  
 
