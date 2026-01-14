@@ -14,7 +14,17 @@
 
 ## Requirements
 
-WIP
+To begin using bot, ensure you already have following:
+
+- A Telegram bot token (you can get one from [@BotFather](https://t.me/BotFather) on Telegram)
+- API ID and Hash: You can get these by creating an application on [my.telegram.org](https://my.telegram.org) 
+
+> **Warning**: This is irreversible process, API ID and Hash can only be deleted by deleting your Telegram account. Never share your credentials.
+
+- To Get `SESSION_STRING` run `session-string.py` in Colab and follow instructions. 
+
+> **Note**: All dependencies will be installed during Colab setup.
+
 
 ## Configuration
 
