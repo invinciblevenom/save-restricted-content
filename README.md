@@ -20,7 +20,7 @@ WIP
 
 Performance settings (change in `config.py`):
    - **`MAX_CONCURRENT_DOWNLOADS`**: Number of simultaneous downloads (default: 3)
-   - **`BATCH_SIZE`**: Number of posts to process in parallel during batch downloads (default: 8)
+   - **`BATCH_SIZE`**: Number of posts to process in parallel during batch downloads (default: 10)
    - **`FLOOD_WAIT_DELAY`**: Delay in seconds between batch groups to avoid flood limits (default: 3)
 
 ## Deploy the Bot
