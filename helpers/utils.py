@@ -1,15 +1,10 @@
 import os
 import asyncio
 from time import time
-from PIL import Image
-from logger import LOGGER
-from typing import Optional
 from asyncio.subprocess import PIPE
 from asyncio import create_subprocess_exec, create_subprocess_shell, wait_for
 
 from pyleaves import Leaves
-from pyrogram.parser import Parser
-from pyrogram.utils import get_channel_id
 from pyrogram.types import (
     InputMediaPhoto,
     InputMediaVideo,
@@ -26,6 +21,7 @@ from helpers.files import (
 from helpers.msg import (
     get_parsed_msg
 )
+from logger import LOGGER
 
 # Progress bar template
 PROGRESS_BAR = """
@@ -129,6 +125,9 @@ def progressArgs(action: str, progress_message, start_time):
 async def send_media(
     bot, message, media_path, media_type, caption, progress_message, start_time
 ):
+    """
+    Enhanced send_media with retry logic to handle socket closure errors.
+    """
     file_size = os.path.getsize(media_path)
 
     if not await fileSizeLimit(file_size, message, "upload"):
@@ -137,55 +136,89 @@ async def send_media(
     progress_args = progressArgs("📥 Uploading Progress", progress_message, start_time)
     LOGGER(__name__).info(f"Uploading media: {media_path} ({media_type})")
 
-    if media_type == "photo":
-        await message.reply_photo(
-            media_path,
-            caption=caption or "",
-            progress=Leaves.progress_for_pyrogram,
-            progress_args=progress_args,
-        )
-    elif media_type == "video":
-        duration, _, _, width, height = await get_media_info(media_path)
+    # Retry settings
+    MAX_RETRIES = 3
+    retry_count = 0
 
-        if not duration or duration == 0:
-            duration = 0
-            LOGGER(__name__).warning(f"Could not extract duration for {media_path}")
+    while retry_count < MAX_RETRIES:
+        try:
+            if media_type == "photo":
+                await bot.send_photo(
+                    chat_id=message.chat.id,
+                    photo=media_path,
+                    caption=caption or "",
+                    progress=Leaves.progress_for_pyrogram,
+                    progress_args=progress_args,
+                )
+            elif media_type == "video":
+                duration, _, _, width, height = await get_media_info(media_path)
 
-        if not width or not height:
-            width = 640
-            height = 480
+                if not duration or duration == 0:
+                    duration = 0
+                    LOGGER(__name__).warning(f"Could not extract duration for {media_path}")
 
-        thumb = await get_video_thumbnail(media_path, duration)
+                if not width or not height:
+                    width = 640
+                    height = 480
 
-        await message.reply_video(
-            media_path,
-            duration=duration,
-            width=width,
-            height=height,
-            thumb=thumb,
-            caption=caption or "",
-            supports_streaming=True,
-            progress=Leaves.progress_for_pyrogram,
-            progress_args=progress_args,
-        )
-    elif media_type == "audio":
-        duration, artist, title, _, _ = await get_media_info(media_path)
-        await message.reply_audio(
-            media_path,
-            duration=duration,
-            performer=artist,
-            title=title,
-            caption=caption or "",
-            progress=Leaves.progress_for_pyrogram,
-            progress_args=progress_args,
-        )
-    elif media_type == "document":
-        await message.reply_document(
-            media_path,
-            caption=caption or "",
-            progress=Leaves.progress_for_pyrogram,
-            progress_args=progress_args,
-        )
+                thumb = await get_video_thumbnail(media_path, duration)
+
+                await bot.send_video(
+                    chat_id=message.chat.id,
+                    video=media_path,
+                    duration=duration,
+                    width=width,
+                    height=height,
+                    thumb=thumb,
+                    caption=caption or "",
+                    supports_streaming=True,
+                    progress=Leaves.progress_for_pyrogram,
+                    progress_args=progress_args,
+                )
+            elif media_type == "audio":
+                duration, artist, title, _, _ = await get_media_info(media_path)
+                await bot.send_audio(
+                    chat_id=message.chat.id,
+                    audio=media_path,
+                    duration=duration,
+                    performer=artist,
+                    title=title,
+                    caption=caption or "",
+                    progress=Leaves.progress_for_pyrogram,
+                    progress_args=progress_args,
+                )
+            elif media_type == "document":
+                await bot.send_document(
+                    chat_id=message.chat.id,
+                    document=media_path,
+                    caption=caption or "",
+                    progress=Leaves.progress_for_pyrogram,
+                    progress_args=progress_args,
+                )
+            
+            # If successful, exit loop
+            return
+
+        except Exception as e:
+            retry_count += 1
+            error_str = str(e)
+            LOGGER(__name__).warning(f"Upload failed (Attempt {retry_count}/{MAX_RETRIES}): {error_str}")
+
+            # Check if it's the specific Pyrogram/Asyncio error or a flood wait
+            if "read() called while" in error_str or "FloodWait" in error_str or "BrokenPipe" in error_str:
+                if retry_count < MAX_RETRIES:
+                    wait_time = 5 * retry_count
+                    LOGGER(__name__).info(f"Retrying in {wait_time} seconds...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    await message.reply(f"❌ Upload failed after {MAX_RETRIES} attempts due to network instability.")
+            else:
+                # If it's a different error (e.g., file permission), fail immediately
+                await message.reply(f"❌ Upload failed: {error_str}")
+                return
+    
+    # If loop finishes without return
+    await message.reply("❌ Upload failed after multiple attempts.")
 
 
 async def download_single_media(msg, progress_message, start_time):
