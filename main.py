@@ -6,7 +6,7 @@ from time import time
 
 from pyleaves import Leaves
 from pyrogram.enums import ParseMode
-from pyrogram import Client, filters
+from pyrogram import Client, compose, filters
 from pyrogram.errors import PeerIdInvalid, BadRequest
 from pyrogram.types import Message
 
@@ -41,8 +41,8 @@ bot = Client(
     bot_token=PyroConf.BOT_TOKEN,
     workers=100,
     parse_mode=ParseMode.MARKDOWN,
-    max_concurrent_transmissions=1, # ✅ SAFE DEFAULT
-    sleep_threshold=30,
+    max_concurrent_transmissions=1,
+    sleep_threshold=60,
 )
 
 # Client for user session
@@ -50,8 +50,8 @@ user = Client(
     "user_session",
     workers=100,
     session_string=PyroConf.SESSION_STRING,
-    max_concurrent_transmissions=1, # ✅ SAFE DEFAULT
-    sleep_threshold=30,
+    max_concurrent_transmissions=1,
+    sleep_threshold=60,
 )
 
 RUNNING_TASKS = set()
@@ -77,7 +77,6 @@ async def start(_, message: Message):
         "🔒 Make sure the user client is part of the chat.\n\n"
         "Ready? Send me a Telegram post link!"
     )
-
     await message.reply(welcome_text, disable_web_page_preview=True)
 
 
@@ -100,7 +99,6 @@ async def help_command(_, message: Message):
         "➤ **Stats**\n"
         "   – Send `/stats` to view current status:\n\n"
     )
-    
     await message.reply(help_text, disable_web_page_preview=True)
 
 
@@ -111,6 +109,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
 
         try:
             chat_id, message_id = getChatMsgID(post_url)
+            # Use the user client to fetch the message
             chat_message = await user.get_messages(chat_id=chat_id, message_ids=message_id)
 
             LOGGER(__name__).info(f"Downloading media from URL: {post_url}")
@@ -123,7 +122,6 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     if chat_message.video
                     else chat_message.audio.file_size
                 )
-
                 if not await fileSizeLimit(
                     file_size, message, "download", user.me.is_premium
                 ):
@@ -179,6 +177,8 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     if chat_message.audio
                     else "document"
                 )
+                
+                # Use retry-safe send_media
                 await send_media(
                     bot,
                     message,
@@ -302,8 +302,8 @@ async def download_range(bot: Client, message: Message):
         "**✅ Batch Process Complete!**\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         f"📥 **Downloaded** : `{downloaded}` post(s)\n"
-        f"⏭️ **Skipped**    : `{skipped}` (no content)\n"
-        f"❌ **Failed**     : `{failed}` error(s)"
+        f"⏭️ **Skipped** : `{skipped}` (no content)\n"
+        f"❌ **Failed** : `{failed}` error(s)"
     )
 
 
@@ -364,13 +364,18 @@ async def cancel_all_tasks(_, message: Message):
 async def initialize():
     global download_semaphore
     download_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_DOWNLOADS)
+    LOGGER(__name__).info("Bot Initialized!")
+
 
 if __name__ == "__main__":
     try:
-        LOGGER(__name__).info("Bot Started!")
-        asyncio.get_event_loop().run_until_complete(initialize())
-        user.start()
-        bot.run()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(initialize())
+        
+        # Use compose to manage both clients in the same loop properly
+        LOGGER(__name__).info("Starting Clients...")
+        compose([bot, user])
+        
     except KeyboardInterrupt:
         pass
     except Exception as err:
