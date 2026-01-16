@@ -8,7 +8,7 @@ from pyleaves import Leaves
 from pyrogram.enums import ParseMode
 from pyrogram import Client, filters
 from pyrogram.errors import PeerIdInvalid, BadRequest
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message
 
 from helpers.utils import (
     processMediaGroup,
@@ -78,7 +78,7 @@ async def start(_, message: Message):
         "Ready? Send me a Telegram post link!"
     )
 
-    await message.reply(welcome_text, reply_markup=markup, disable_web_page_preview=True)
+    await message.reply(welcome_text, disable_web_page_preview=True)
 
 
 @bot.on_message(filters.command("help") & filters.private)
@@ -101,7 +101,7 @@ async def help_command(_, message: Message):
         "   – Send `/stats` to view current status:\n\n"
     )
     
-    await message.reply(help_text, reply_markup=markup, disable_web_page_preview=True)
+    await message.reply(help_text, disable_web_page_preview=True)
 
 
 async def handle_download(bot: Client, message: Message, post_url: str):
