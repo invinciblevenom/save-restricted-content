@@ -1,25 +1,17 @@
 import logging
-import os
-from logging.handlers import RotatingFileHandler
-
-# removing old logs file if they exist.
-try:
-    os.remove("logs.txt")
-except:
-    pass
+from logging import FileHandler, StreamHandler
 
 logging.basicConfig(
     level=logging.INFO,
-    format="[%(asctime)s - %(levelname)s] - %(funcName)s() - Line %(lineno)d: %(name)s - %(message)s",
-    datefmt="%d-%b-%y %I:%M:%S %p",
+    format="[%(asctime)s - %(levelname)s] - %(message)s",
+    datefmt="%d-%m-%y %I:%M %p",
     handlers=[
-        RotatingFileHandler("logs.txt", mode="w+", maxBytes=5000000, backupCount=5),
-        logging.StreamHandler(),
+        FileHandler("logs.txt", mode="w"),
+        StreamHandler(),
     ],
 )
 
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
-
 
 def LOGGER(name: str) -> logging.Logger:
     return logging.getLogger(name)
