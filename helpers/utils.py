@@ -140,7 +140,7 @@ async def send_media(
     filename = os.path.basename(media_path)
     progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
     
-    LOGGER(__name__).info(f"Uploading media: {media_path} ({media_type})")
+    LOGGER(__name__).info(f"Uploading media: {filename} ({media_type})")
 
     # Retry settings
     MAX_RETRIES = 3

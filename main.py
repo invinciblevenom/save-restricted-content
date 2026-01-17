@@ -166,7 +166,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     cleanup_download(media_path)
                     return
 
-                LOGGER(__name__).info(f"Downloaded media: {media_path} (Size: {file_size} bytes)")
+                LOGGER(__name__).info(f"Downloaded media: {os.path.basename(media_path)} (Size: {file_size} bytes)")
 
                 media_type = (
                     "photo"
