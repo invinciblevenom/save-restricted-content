@@ -19,7 +19,8 @@ from helpers.files import (
 )
 
 from helpers.msg import (
-    get_parsed_msg
+    get_parsed_msg,
+    get_file_name
 )
 from logger import LOGGER
 
@@ -118,7 +119,9 @@ async def get_video_thumbnail(video_file, duration):
 
 
 # Generate progress bar for downloading/uploading
-def progressArgs(action: str, progress_message, start_time):
+def progressArgs(action: str, progress_message, start_time, filename: str = None):
+    if filename:
+        action = f"{action}\n📝 **File:** `{filename}`"
     return (action, progress_message, start_time, PROGRESS_BAR, "▓", "░")
 
 
@@ -133,7 +136,10 @@ async def send_media(
     if not await fileSizeLimit(file_size, message, "upload"):
         return
 
-    progress_args = progressArgs("📥 Uploading Progress", progress_message, start_time)
+    # Extract filename for display
+    filename = os.path.basename(media_path)
+    progress_args = progressArgs("📥 Uploading Progress", progress_message, start_time, filename)
+    
     LOGGER(__name__).info(f"Uploading media: {media_path} ({media_type})")
 
     # Retry settings
@@ -223,10 +229,12 @@ async def send_media(
 
 async def download_single_media(msg, progress_message, start_time):
     try:
+        filename = get_file_name(msg.id, msg)
+        
         media_path = await msg.download(
             progress=Leaves.progress_for_pyrogram,
             progress_args=progressArgs(
-                "📥 Downloading Progress", progress_message, start_time
+                "📥 Downloading Progress", progress_message, start_time, filename
             ),
         )
 

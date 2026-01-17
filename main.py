@@ -152,7 +152,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     file_name=download_path,
                     progress=Leaves.progress_for_pyrogram,
                     progress_args=progressArgs(
-                        "📥 Downloading Progress", progress_message, start_time
+                        "📥 Downloading Progress", progress_message, start_time, filename
                     ),
                 )
 
