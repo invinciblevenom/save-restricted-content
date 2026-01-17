@@ -121,7 +121,7 @@ async def get_video_thumbnail(video_file, duration):
 # Generate progress bar for downloading/uploading
 def progressArgs(action: str, progress_message, start_time, filename: str = None):
     if filename:
-        action = f"{action}\n📝 **File:** `{filename}`"
+        action = f"{action}\nFile: {filename}"
     return (action, progress_message, start_time, PROGRESS_BAR, "■", "□")
 
 
