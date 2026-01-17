@@ -28,7 +28,7 @@ from logger import LOGGER
 PROGRESS_BAR = """
 Percentage: {percentage:.2f}% | {current}/{total}
 Speed: {speed}/s
-Estimated Time Left: {est_time} seconds
+Estimated Time Left: {est_time}
 """
 
 async def cmd_exec(cmd, shell=False):
