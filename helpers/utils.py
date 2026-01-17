@@ -138,7 +138,7 @@ async def send_media(
 
     # Extract filename for display
     filename = os.path.basename(media_path)
-    progress_args = progressArgs("📥 Uploading Progress", progress_message, start_time, filename)
+    progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
     
     LOGGER(__name__).info(f"Uploading media: {media_path} ({media_type})")
 

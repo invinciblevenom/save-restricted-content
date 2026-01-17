@@ -143,7 +143,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
 
             elif chat_message.media:
                 start_time = time()
-                progress_message = await message.reply("**📥 Downloading Progress...**")
+                progress_message = await message.reply("**📥 Downloading**")
 
                 filename = get_file_name(message_id, chat_message)
                 download_path = get_download_path(message.id, filename)
@@ -152,7 +152,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     file_name=download_path,
                     progress=Leaves.progress_for_pyrogram,
                     progress_args=progressArgs(
-                        "📥 Downloading Progress", progress_message, start_time, filename
+                        "📥 Downloading", progress_message, start_time, filename
                     ),
                 )
 
