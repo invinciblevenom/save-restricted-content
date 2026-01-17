@@ -1,3 +1,4 @@
+import re
 from pyrogram.parser import Parser
 from pyrogram.utils import get_channel_id
 
@@ -38,26 +39,54 @@ def getChatMsgID(link: str):
 
 
 def get_file_name(message_id: int, chat_message) -> str:
+    def clean_name(name):
+        if not name:
+            return ""
+
+        name = re.sub(r'^\d+_', '', name)
+
+        name = name.replace('_', ' ')
+
+        match = re.match(r'^(\d+)\s*([a-zA-Z])', name)
+        if match:
+            prefix_num = match.group(1)
+            rest_of_text = name[len(match.group(0))-1:] 
+            name = f"{prefix_num}) {rest_of_text}"
+
+        if re.match(r'^\d+ ', name) and not name.startswith(f"{name.split(' ')[0]})"):
+            parts = name.split(' ', 1)
+            if len(parts) > 1:
+                name = f"{parts[0]}) {parts[1]}"
+            
+        return name
+
+    filename = ""
+
     if chat_message.document:
-        return chat_message.document.file_name
+        filename = chat_message.document.file_name
     elif chat_message.video:
-        return chat_message.video.file_name or f"{message_id}.mp4"
+        filename = chat_message.video.file_name or f"{message_id}.mp4"
     elif chat_message.audio:
-        return chat_message.audio.file_name or f"{message_id}.mp3"
+        filename = chat_message.audio.file_name or f"{message_id}.mp3"
     elif chat_message.voice:
-        return f"{message_id}.ogg"
+        filename = f"{message_id}.ogg"
     elif chat_message.video_note:
-        return f"{message_id}.mp4"
+        filename = f"{message_id}.mp4"
     elif chat_message.animation:
-        return chat_message.animation.file_name or f"{message_id}.gif"
+        filename = chat_message.animation.file_name or f"{message_id}.gif"
     elif chat_message.sticker:
         if chat_message.sticker.is_animated:
-            return f"{message_id}.tgs"
+            filename = f"{message_id}.tgs"
         elif chat_message.sticker.is_video:
-            return f"{message_id}.webm"
+            filename = f"{message_id}.webm"
         else:
-            return f"{message_id}.webp"
+            filename = f"{message_id}.webp"
     elif chat_message.photo:
-        return f"{message_id}.jpg"
-    else:
-        return f"{message_id}"
+        filename = f"{message_id}.jpg"
+    
+    final_name = clean_name(filename)
+
+    if not final_name or final_name.strip() == "":
+        return str(message_id)
+
+    return final_name
