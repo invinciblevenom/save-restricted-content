@@ -33,7 +33,6 @@ from helpers.msg import (
 from config import PyroConf
 from logger import LOGGER
 
-# Initialize the bot client
 bot = Client(
     "media_bot",
     api_id=PyroConf.API_ID,
@@ -45,7 +44,6 @@ bot = Client(
     sleep_threshold=60,
 )
 
-# Client for user session
 user = Client(
     "user_session",
     workers=100,
@@ -109,7 +107,6 @@ async def handle_download(bot: Client, message: Message, post_url: str):
 
         try:
             chat_id, message_id = getChatMsgID(post_url)
-            # Use the user client to fetch the message
             chat_message = await user.get_messages(chat_id=chat_id, message_ids=message_id)
 
             LOGGER(__name__).info(f"Downloading media from URL: {post_url}")
@@ -178,8 +175,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     else "document"
                 )
                 
-                # Use retry-safe send_media
-                await send_media(
+                upload_success = await send_media(
                     bot,
                     message,
                     media_path,
@@ -190,7 +186,12 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                 )
 
                 cleanup_download(media_path)
-                await progress_message.delete()
+
+                if upload_success:
+                    await progress_message.delete()
+                else:
+                    LOGGER(__name__).warning(f"Skipped upload for: {filename}")
+                    await progress_message.delete()
 
             elif chat_message.text or chat_message.caption:
                 await message.reply(parsed_text or parsed_caption)
@@ -371,8 +372,7 @@ if __name__ == "__main__":
     try:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(initialize())
-        
-        # Use compose to manage both clients in the same loop properly
+
         LOGGER(__name__).info("Starting Clients...")
         compose([bot, user])
         

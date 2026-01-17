@@ -13,6 +13,8 @@ from pyrogram.types import (
     Voice,
 )
 
+from pyrogram.errors import FloodWait
+
 from helpers.files import (
     fileSizeLimit,
     cleanup_download
@@ -24,7 +26,6 @@ from helpers.msg import (
 )
 from logger import LOGGER
 
-# Progress bar template
 PROGRESS_BAR = """
 Percentage: {percentage:.2f}% | {current}/{total}
 Speed: {speed}/s
@@ -117,8 +118,6 @@ async def get_video_thumbnail(video_file, duration):
         return None
     return output
 
-
-# Generate progress bar for downloading/uploading
 def progressArgs(action: str, progress_message, start_time, filename: str = None):
     if filename:
         action = f"{action}\nFile: {filename}"
@@ -128,21 +127,21 @@ def progressArgs(action: str, progress_message, start_time, filename: str = None
 async def send_media(
     bot, message, media_path, media_type, caption, progress_message, start_time
 ):
-    """
-    Enhanced send_media with retry logic to handle socket closure errors.
-    """
-    file_size = os.path.getsize(media_path)
+
+    try:
+        file_size = os.path.getsize(media_path)
+    except OSError as e:
+        LOGGER(__name__).error(f"File not found or inaccessible: {e}")
+        return False
 
     if not await fileSizeLimit(file_size, message, "upload"):
-        return
+        return False
 
-    # Extract filename for display
     filename = os.path.basename(media_path)
     progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
     
     LOGGER(__name__).info(f"Uploading media: {filename} ({media_type})")
 
-    # Retry settings
     MAX_RETRIES = 3
     retry_count = 0
 
@@ -161,8 +160,6 @@ async def send_media(
 
                 if not duration or duration == 0:
                     duration = 0
-                    LOGGER(__name__).warning(f"Could not extract duration for {media_path}")
-
                 if not width or not height:
                     width = 640
                     height = 480
@@ -202,29 +199,44 @@ async def send_media(
                     progress_args=progress_args,
                 )
             
-            # If successful, exit loop
-            return
+            return True
+
+        except FloodWait as e:
+            retry_count += 1
+            if retry_count < MAX_RETRIES:
+                wait_time = e.value + 5
+                LOGGER(__name__).warning(f"FloodWait detected. Sleeping for {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            else:
+                LOGGER(__name__).error(f"Failed to upload {filename} after max retries (FloodWait).")
+                await message.reply(f"❌ Upload failed due to FloodWait limits.")
+                return False
+
+        except (TimeoutError, asyncio.TimeoutError) as e:
+
+            LOGGER(__name__).warning(f"Timeout while uploading {filename}. Skipping to next file.")
+            await message.reply(f"❌ **Skipping** `{filename}` due to upload timeout.")
+            return False
 
         except Exception as e:
             retry_count += 1
             error_str = str(e)
-            LOGGER(__name__).warning(f"Upload failed (Attempt {retry_count}/{MAX_RETRIES}): {error_str}")
 
-            # Check if it's the specific Pyrogram/Asyncio error or a flood wait
-            if "read() called while" in error_str or "FloodWait" in error_str or "BrokenPipe" in error_str:
-                if retry_count < MAX_RETRIES:
-                    wait_time = 5 * retry_count
-                    LOGGER(__name__).info(f"Retrying in {wait_time} seconds...")
-                    await asyncio.sleep(wait_time)
-                else:
-                    await message.reply(f"❌ Upload failed after {MAX_RETRIES} attempts due to network instability.")
+            if "timed out" in error_str.lower() or "timeout" in error_str.lower():
+                LOGGER(__name__).warning(f"Timeout detected ({error_str}). Skipping {filename}.")
+                await message.reply(f"❌ **Skipping** `{filename}` due to upload timeout.")
+                return False
+
+            LOGGER(__name__).warning(f"Upload attempt {retry_count}/{MAX_RETRIES} failed: {error_str}")
+            
+            if retry_count < MAX_RETRIES:
+                await asyncio.sleep(5)
             else:
-                # If it's a different error (e.g., file permission), fail immediately
+                LOGGER(__name__).error(f"Failed to upload {filename} after {MAX_RETRIES} attempts.")
                 await message.reply(f"❌ Upload failed: {error_str}")
-                return
+                return False
     
-    # If loop finishes without return
-    await message.reply("❌ Upload failed after multiple attempts.")
+    return False
 
 
 async def download_single_media(msg, progress_message, start_time):
