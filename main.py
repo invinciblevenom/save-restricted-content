@@ -63,7 +63,6 @@ def track_task(coro):
     task.add_done_callback(_remove)
     return task
 
-
 @bot.on_message(filters.command("start") & filters.private)
 async def start(_, message: Message):
     welcome_text = (
@@ -76,7 +75,6 @@ async def start(_, message: Message):
         "Ready? Send me a Telegram post link!"
     )
     await message.reply(welcome_text, disable_web_page_preview=True)
-
 
 @bot.on_message(filters.command("help") & filters.private)
 async def help_command(_, message: Message):
@@ -99,11 +97,12 @@ async def help_command(_, message: Message):
     )
     await message.reply(help_text, disable_web_page_preview=True)
 
-
 async def handle_download(bot: Client, message: Message, post_url: str):
     async with download_semaphore:
         if "?" in post_url:
             post_url = post_url.split("?", 1)[0]
+
+        media_path = None 
 
         try:
             chat_id, message_id = getChatMsgID(post_url)
@@ -160,7 +159,6 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                 file_size = os.path.getsize(media_path)
                 if file_size == 0:
                     await progress_message.edit("**❌ Download failed: File is empty**")
-                    cleanup_download(media_path)
                     return
 
                 LOGGER(__name__).info(f"Downloaded media: {os.path.basename(media_path)} (Size: {file_size} bytes)")
@@ -185,12 +183,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     start_time,
                 )
 
-                cleanup_download(media_path)
-
                 if upload_success:
-                    await progress_message.delete()
-                else:
-                    LOGGER(__name__).warning(f"Skipped upload for: {filename}")
                     await progress_message.delete()
 
             elif chat_message.text or chat_message.caption:
@@ -204,7 +197,10 @@ async def handle_download(bot: Client, message: Message, post_url: str):
             error_message = f"**❌ {str(e)}**"
             await message.reply(error_message)
             LOGGER(__name__).error(e)
+        finally:
 
+            if media_path:
+                cleanup_download(media_path)
 
 @bot.on_message(filters.command("dl") & filters.private)
 async def download_media(bot: Client, message: Message):
@@ -214,7 +210,6 @@ async def download_media(bot: Client, message: Message):
 
     post_url = message.command[1]
     await track_task(handle_download(bot, message, post_url))
-
 
 @bot.on_message(filters.command("batch") & filters.private)
 async def download_range(bot: Client, message: Message):
@@ -307,12 +302,10 @@ async def download_range(bot: Client, message: Message):
         f"❌ **Failed** : `{failed}` error(s)"
     )
 
-
 @bot.on_message(filters.private & ~filters.command(["start", "help", "dl", "stats", "logs", "stop"]))
 async def handle_any_message(bot: Client, message: Message):
     if message.text and not message.text.startswith("/"):
         await track_task(handle_download(bot, message, message.text))
-
 
 @bot.on_message(filters.command("stats") & filters.private)
 async def stats(_, message: Message):
@@ -343,14 +336,12 @@ async def stats(_, message: Message):
     )
     await message.reply(stats)
 
-
 @bot.on_message(filters.command("logs") & filters.private)
 async def logs(_, message: Message):
     if os.path.exists("logs.txt"):
         await message.reply_document(document="logs.txt", caption="**Logs**")
     else:
         await message.reply("**Not exists**")
-
 
 @bot.on_message(filters.command("stop") & filters.private)
 async def cancel_all_tasks(_, message: Message):
@@ -361,12 +352,10 @@ async def cancel_all_tasks(_, message: Message):
             cancelled += 1
     await message.reply(f"**Cancelled {cancelled} running task(s).**")
 
-
 async def initialize():
     global download_semaphore
     download_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_DOWNLOADS)
     LOGGER(__name__).info("Bot Initialized!")
-
 
 if __name__ == "__main__":
     try:

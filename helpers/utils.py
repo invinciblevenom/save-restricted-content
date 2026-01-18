@@ -48,7 +48,6 @@ async def cmd_exec(cmd, shell=False):
         stderr = "Unable to decode the error!"
     return stdout, stderr, proc.returncode
 
-
 async def get_media_info(path):
     try:
         result = await cmd_exec([
@@ -84,7 +83,6 @@ async def get_media_info(path):
             LOGGER(__name__).error(f"Error parsing media info: {e}")
             return 0, None, None, None, None
     return 0, None, None, None, None
-
 
 async def get_video_thumbnail(video_file, duration):
     os.makedirs("Assets", exist_ok=True)
@@ -123,11 +121,9 @@ def progressArgs(action: str, progress_message, start_time, filename: str = None
         action = f"{action}\nFile: {filename}"
     return (action, progress_message, start_time, PROGRESS_BAR, "■", "□")
 
-
 async def send_media(
     bot, message, media_path, media_type, caption, progress_message, start_time
 ):
-
     try:
         file_size = os.path.getsize(media_path)
     except OSError as e:
@@ -138,8 +134,6 @@ async def send_media(
         return False
 
     filename = os.path.basename(media_path)
-    progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
-    
     LOGGER(__name__).info(f"Uploading media: {filename} ({media_type})")
 
     MAX_RETRIES = 3
@@ -147,6 +141,8 @@ async def send_media(
 
     while retry_count < MAX_RETRIES:
         try:
+            progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
+
             if media_type == "photo":
                 await bot.send_photo(
                     chat_id=message.chat.id,
@@ -157,13 +153,9 @@ async def send_media(
                 )
             elif media_type == "video":
                 duration, _, _, width, height = await get_media_info(media_path)
-
-                if not duration or duration == 0:
-                    duration = 0
-                if not width or not height:
-                    width = 640
-                    height = 480
-
+                if not duration or duration == 0: duration = 0
+                if not width or not height: width, height = 640, 480
+                
                 thumb = await get_video_thumbnail(media_path, duration)
 
                 await bot.send_video(
@@ -203,41 +195,33 @@ async def send_media(
 
         except FloodWait as e:
             retry_count += 1
+            wait_time = e.value + 5
+            LOGGER(__name__).warning(f"FloodWait detected. Sleeping {wait_time}s. Retry {retry_count}/{MAX_RETRIES}")
+            await progress_message.edit(f"⏳ **FloodWait:** Sleeping {wait_time}s... (Retry {retry_count}/{MAX_RETRIES})")
             if retry_count < MAX_RETRIES:
-                wait_time = e.value + 5
-                LOGGER(__name__).warning(f"FloodWait detected. Sleeping for {wait_time}s...")
                 await asyncio.sleep(wait_time)
             else:
-                LOGGER(__name__).error(f"Failed to upload {filename} after max retries (FloodWait).")
-                await message.reply(f"❌ Upload failed due to FloodWait limits.")
                 return False
-
-        except (TimeoutError, asyncio.TimeoutError) as e:
-
-            LOGGER(__name__).warning(f"Timeout while uploading {filename}. Skipping to next file.")
-            await message.reply(f"❌ **Skipping** `{filename}` due to upload timeout.")
-            return False
 
         except Exception as e:
             retry_count += 1
-            error_str = str(e)
-
-            if "timed out" in error_str.lower() or "timeout" in error_str.lower():
-                LOGGER(__name__).warning(f"Timeout detected ({error_str}). Skipping {filename}.")
-                await message.reply(f"❌ **Skipping** `{filename}` due to upload timeout.")
-                return False
-
-            LOGGER(__name__).warning(f"Upload attempt {retry_count}/{MAX_RETRIES} failed: {error_str}")
+            LOGGER(__name__).warning(f"Upload failed for {filename}: {e}")
             
             if retry_count < MAX_RETRIES:
+                try:
+                    await progress_message.edit(f"⚠️ **Upload Failed.** Retrying {retry_count}/{MAX_RETRIES}...")
+                except:
+                    pass
                 await asyncio.sleep(5)
             else:
                 LOGGER(__name__).error(f"Failed to upload {filename} after {MAX_RETRIES} attempts.")
-                await message.reply(f"❌ Upload failed: {error_str}")
+                try:
+                    await progress_message.edit(f"❌ **Upload Failed after {MAX_RETRIES} attempts.**\nReason: {e}")
+                except:
+                    pass
                 return False
     
     return False
-
 
 async def download_single_media(msg, progress_message, start_time):
     try:
@@ -268,7 +252,6 @@ async def download_single_media(msg, progress_message, start_time):
         return ("error", None, None)
 
     return ("skip", None, None)
-
 
 async def processMediaGroup(chat_message, bot, message):
     media_group_messages = await chat_message.get_media_group()
