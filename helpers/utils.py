@@ -118,7 +118,8 @@ async def get_video_thumbnail(video_file, duration):
 
 def progressArgs(action: str, progress_message, start_time, filename: str = None):
     if filename:
-        action = f"{action}\nFile: {filename}"
+        clean_filename = filename.replace(".", ".\u200b") 
+        action = f"{action}\nFile: {clean_filename}"
     return (action, progress_message, start_time, PROGRESS_BAR, "■", "□")
 
 async def send_media(
