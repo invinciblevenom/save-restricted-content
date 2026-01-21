@@ -54,6 +54,7 @@ user = Client(
 
 RUNNING_TASKS = set()
 download_semaphore = None
+upload_semaphore = None
 
 def track_task(coro):
     task = asyncio.create_task(coro)
@@ -98,52 +99,54 @@ async def help_command(_, message: Message):
     await message.reply(help_text, disable_web_page_preview=True)
 
 async def handle_download(bot: Client, message: Message, post_url: str):
-    async with download_semaphore:
-        if "?" in post_url:
-            post_url = post_url.split("?", 1)[0]
+    if "?" in post_url:
+        post_url = post_url.split("?", 1)[0]
 
-        media_path = None 
+    media_path = None 
 
-        try:
-            chat_id, message_id = getChatMsgID(post_url)
-            chat_message = await user.get_messages(chat_id=chat_id, message_ids=message_id)
+    try:
+        chat_id, message_id = getChatMsgID(post_url)
+        chat_message = await user.get_messages(chat_id=chat_id, message_ids=message_id)
 
-            LOGGER(__name__).info(f"Downloading media from URL: {post_url}")
+        LOGGER(__name__).info(f"Processing URL: {post_url}")
 
-            if chat_message.document or chat_message.video or chat_message.audio:
-                file_size = (
-                    chat_message.document.file_size
-                    if chat_message.document
-                    else chat_message.video.file_size
-                    if chat_message.video
-                    else chat_message.audio.file_size
-                )
-                if not await fileSizeLimit(
-                    file_size, message, "download", user.me.is_premium
-                ):
-                    return
-
-            parsed_caption = await get_parsed_msg(
-                chat_message.caption or "", chat_message.caption_entities
+        if chat_message.document or chat_message.video or chat_message.audio:
+            file_size = (
+                chat_message.document.file_size
+                if chat_message.document
+                else chat_message.video.file_size
+                if chat_message.video
+                else chat_message.audio.file_size
             )
-            parsed_text = await get_parsed_msg(
-                chat_message.text or "", chat_message.entities
-            )
-
-            if chat_message.media_group_id:
-                if not await processMediaGroup(chat_message, bot, message):
-                    await message.reply(
-                        "**Could not extract any valid media from the media group.**"
-                    )
+            if not await fileSizeLimit(
+                file_size, message, "download", user.me.is_premium
+            ):
                 return
 
-            elif chat_message.media:
-                start_time = time()
-                progress_message = await message.reply("**📥 Downloading**")
+        parsed_caption = await get_parsed_msg(
+            chat_message.caption or "", chat_message.caption_entities
+        )
+        parsed_text = await get_parsed_msg(
+            chat_message.text or "", chat_message.entities
+        )
 
-                filename = get_file_name(message_id, chat_message)
-                download_path = get_download_path(message.id, filename)
+        if chat_message.media_group_id:
+            if not await processMediaGroup(chat_message, bot, message):
+                await message.reply(
+                    "**Could not extract any valid media from the media group.**"
+                )
+            return
 
+        elif chat_message.media:
+            start_time = time()
+            progress_message = await message.reply("**⏳ Queueing Download...**")
+
+            filename = get_file_name(message_id, chat_message)
+            download_path = get_download_path(message.id, filename)
+
+            async with download_semaphore:
+                await progress_message.edit(f"**📥 Downloading:** {filename}")
+                
                 media_path = await chat_message.download(
                     file_name=download_path,
                     progress=Leaves.progress_for_pyrogram,
@@ -152,27 +155,30 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     ),
                 )
 
-                if not media_path or not os.path.exists(media_path):
-                    await progress_message.edit("**❌ Download failed: File not saved properly**")
-                    return
+            if not media_path or not os.path.exists(media_path):
+                await progress_message.edit("**❌ Download failed: File not saved properly**")
+                return
 
-                file_size = os.path.getsize(media_path)
-                if file_size == 0:
-                    await progress_message.edit("**❌ Download failed: File is empty**")
-                    return
+            file_size = os.path.getsize(media_path)
+            if file_size == 0:
+                await progress_message.edit("**❌ Download failed: File is empty**")
+                return
 
-                LOGGER(__name__).info(f"Downloaded media: {os.path.basename(media_path)} (Size: {file_size} bytes)")
+            LOGGER(__name__).info(f"Downloaded media: {os.path.basename(media_path)} (Size: {file_size} bytes)")
+            
+            await progress_message.edit("**⏳ Waiting for Upload...**")
 
-                media_type = (
-                    "photo"
-                    if chat_message.photo
-                    else "video"
-                    if chat_message.video
-                    else "audio"
-                    if chat_message.audio
-                    else "document"
-                )
-                
+            media_type = (
+                "photo"
+                if chat_message.photo
+                else "video"
+                if chat_message.video
+                else "audio"
+                if chat_message.audio
+                else "document"
+            )
+            
+            async with upload_semaphore:
                 upload_success = await send_media(
                     bot,
                     message,
@@ -183,24 +189,23 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                     start_time,
                 )
 
-                if upload_success:
-                    await progress_message.delete()
+            if upload_success:
+                await progress_message.delete()
 
-            elif chat_message.text or chat_message.caption:
-                await message.reply(parsed_text or parsed_caption)
-            else:
-                await message.reply("**No media or text found in the post URL.**")
+        elif chat_message.text or chat_message.caption:
+            await message.reply(parsed_text or parsed_caption)
+        else:
+            await message.reply("**No media or text found in the post URL.**")
 
-        except (PeerIdInvalid, BadRequest, KeyError):
-            await message.reply("**Make sure the user client is part of the chat.**")
-        except Exception as e:
-            error_message = f"**❌ {str(e)}**"
-            await message.reply(error_message)
-            LOGGER(__name__).error(e)
-        finally:
-
-            if media_path:
-                cleanup_download(media_path)
+    except (PeerIdInvalid, BadRequest, KeyError):
+        await message.reply("**Make sure the user client is part of the chat.**")
+    except Exception as e:
+        error_message = f"**❌ {str(e)}**"
+        await message.reply(error_message)
+        LOGGER(__name__).error(f"Error handling {post_url}: {e}")
+    finally:
+        if media_path:
+            cleanup_download(media_path)
 
 @bot.on_message(filters.command("dl") & filters.private)
 async def download_media(bot: Client, message: Message):
@@ -353,9 +358,10 @@ async def cancel_all_tasks(_, message: Message):
     await message.reply(f"**Cancelled {cancelled} running task(s).**")
 
 async def initialize():
-    global download_semaphore
+    global download_semaphore, upload_semaphore
     download_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_DOWNLOADS)
-    LOGGER(__name__).info("Bot Initialized!")
+    upload_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_UPLOADS)
+    LOGGER(__name__).info("Bot Started!")
 
 if __name__ == "__main__":
     try:
