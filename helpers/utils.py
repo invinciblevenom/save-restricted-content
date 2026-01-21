@@ -116,7 +116,7 @@ async def get_video_thumbnail(video_file, duration):
         "-y", output,
     ]
     try:
-        _, err, code = await wait_for(cmd_exec(cmd), timeout=60)
+        _, err, code = await cmd_exec(cmd)
         if code != 0 or not os.path.exists(output):
             LOGGER(__name__).warning(f"Thumbnail generation failed: {err}")
             return None
@@ -233,16 +233,17 @@ async def send_media(
     
     return False
 
-async def download_single_media(msg, progress_message, start_time):
+async def download_single_media(msg, progress_message, start_time, semaphore):
     try:
         filename = get_file_name(msg.id, msg)
         
-        media_path = await msg.download(
-            progress=Leaves.progress_for_pyrogram,
-            progress_args=progressArgs(
-                "📥 Downloading Progress", progress_message, start_time, filename
-            ),
-        )
+        async with semaphore:
+            media_path = await msg.download(
+                progress=Leaves.progress_for_pyrogram,
+                progress_args=progressArgs(
+                    "📥 Downloading Progress", progress_message, start_time, filename
+                ),
+            )
 
         parsed_caption = await get_parsed_msg(
             msg.caption or "", msg.caption_entities
@@ -263,7 +264,7 @@ async def download_single_media(msg, progress_message, start_time):
 
     return ("skip", None, None)
 
-async def processMediaGroup(chat_message, bot, message):
+async def processMediaGroup(chat_message, bot, message, semaphore):
     media_group_messages = await chat_message.get_media_group()
     valid_media = []
     temp_paths = []
@@ -278,7 +279,7 @@ async def processMediaGroup(chat_message, bot, message):
     download_tasks = []
     for msg in media_group_messages:
         if msg.photo or msg.video or msg.document or msg.audio:
-            download_tasks.append(download_single_media(msg, progress_message, start_time))
+            download_tasks.append(download_single_media(msg, progress_message, start_time, semaphore))
 
     results = await asyncio.gather(*download_tasks, return_exceptions=True)
 
