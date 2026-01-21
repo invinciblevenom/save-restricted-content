@@ -37,7 +37,16 @@ async def cmd_exec(cmd, shell=False):
         proc = await create_subprocess_shell(cmd, stdout=PIPE, stderr=PIPE)
     else:
         proc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = await proc.communicate()
+    
+    try:
+        stdout, stderr = await wait_for(proc.communicate(), timeout=60)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return "Timeout", "Process timed out", 1
+    except Exception as e:
+        proc.kill()
+        return "Error", str(e), 1
+
     try:
         stdout = stdout.decode().strip()
     except:
