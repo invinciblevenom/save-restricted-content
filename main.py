@@ -131,7 +131,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
         )
 
         if chat_message.media_group_id:
-            if not await processMediaGroup(chat_message, bot, message):
+            if not await processMediaGroup(chat_message, bot, message, download_semaphore):
                 await message.reply(
                     "**Could not extract any valid media from the media group.**"
                 )
