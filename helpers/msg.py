@@ -6,8 +6,10 @@ from pyrogram.utils import get_channel_id
 async def get_parsed_msg(text, entities):
     return Parser.unparse(text, entities or [], is_html=False)
     
-
 def getChatMsgID(link: str):
+    if "?" in link:
+        link = link.split("?")[0]
+
     linkps = link.split("/")
     chat_id, message_thread_id, message_id = None, None, None
     
@@ -36,7 +38,6 @@ def getChatMsgID(link: str):
         raise ValueError("Please send a valid Telegram post URL.")
 
     return chat_id, message_id
-
 
 def get_file_name(message_id: int, chat_message) -> str:
     def clean_name(name):
