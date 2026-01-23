@@ -35,7 +35,29 @@ Performance settings (change in `config.py`):
 
 ## Deploy the Bot
 
-WIP
+Follow below steps for deployment:
+- Clone the repo: `!git clone https://github.com/invinciblevenom/save-restricted-content.git`
+- Install all dependencies: `!pip install -r /content/save-restricted-content/requirements.txt`
+- Get Session String. Login when asked: `!python3 /content/save-restricted-content/session-string.py`
+- You can save API_ID, API_HASH, BOT_TOKEN and SESSION_STRING in Colab Secrets or simply run this in a cell after filling values
+
+  
+  `import os`
+
+  
+  `os.environ["API_ID"] = ""`
+
+  
+  `os.environ["API_HASH"] = ""`
+
+  
+  `os.environ["BOT_TOKEN"] = ""`
+
+  
+  `os.environ["SESSION_STRING"] = ""`
+
+- Start the Bot: `!python3 /content/save-restricted-content/main.py`
+
 
 ## Usage
 
