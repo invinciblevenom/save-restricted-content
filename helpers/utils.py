@@ -17,7 +17,8 @@ from pyrogram.errors import FloodWait
 
 from helpers.files import (
     fileSizeLimit,
-    cleanup_download
+    cleanup_download,
+    get_readable_time
 )
 
 from helpers.msg import (
@@ -117,6 +118,7 @@ async def get_video_thumbnail(video_file, duration):
     ]
     try:
         _, err, code = await cmd_exec(cmd)
+        
         if code != 0 or not os.path.exists(output):
             LOGGER(__name__).warning(f"Thumbnail generation failed: {err}")
             return None
@@ -145,88 +147,86 @@ async def send_media(
 
     filename = os.path.basename(media_path)
     LOGGER(__name__).info(f"Uploading media: {filename} ({media_type})")
+    progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
 
-    MAX_RETRIES = 3
-    retry_count = 0
+    async def _send_once():
+        if media_type == "photo":
+            await bot.send_photo(
+                chat_id=message.chat.id,
+                photo=media_path,
+                caption=caption or "",
+                progress=Leaves.progress_for_pyrogram,
+                progress_args=progress_args,
+            )
+        elif media_type == "video":
+            duration, _, _, width, height = await get_media_info(media_path)
+            if not duration: duration = 0
+            if not width or not height: width, height = 640, 480
+            thumb = await get_video_thumbnail(media_path, duration)
+            await bot.send_video(
+                chat_id=message.chat.id,
+                video=media_path,
+                duration=duration,
+                width=width,
+                height=height,
+                thumb=thumb,
+                caption=caption or "",
+                supports_streaming=True,
+                progress=Leaves.progress_for_pyrogram,
+                progress_args=progress_args,
+            )
+        elif media_type == "audio":
+            duration, artist, title, _, _ = await get_media_info(media_path)
+            await bot.send_audio(
+                chat_id=message.chat.id,
+                audio=media_path,
+                duration=duration,
+                performer=artist,
+                title=title,
+                caption=caption or "",
+                progress=Leaves.progress_for_pyrogram,
+                progress_args=progress_args,
+            )
+        elif media_type == "document":
+            await bot.send_document(
+                chat_id=message.chat.id,
+                document=media_path,
+                caption=caption or "",
+                progress=Leaves.progress_for_pyrogram,
+                progress_args=progress_args,
+            )
 
-    while retry_count < MAX_RETRIES:
+    max_retries = 3
+    retry_count = 1
+
+    while retry_count <= max_retries:
         try:
-            progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
-
-            if media_type == "photo":
-                await bot.send_photo(
-                    chat_id=message.chat.id,
-                    photo=media_path,
-                    caption=caption or "",
-                    progress=Leaves.progress_for_pyrogram,
-                    progress_args=progress_args,
-                )
-            elif media_type == "video":
-                duration, _, _, width, height = await get_media_info(media_path)
-                if not duration or duration == 0: duration = 0
-                if not width or not height: width, height = 640, 480
-                
-                thumb = await get_video_thumbnail(media_path, duration)
-
-                await bot.send_video(
-                    chat_id=message.chat.id,
-                    video=media_path,
-                    duration=duration,
-                    width=width,
-                    height=height,
-                    thumb=thumb,
-                    caption=caption or "",
-                    supports_streaming=True,
-                    progress=Leaves.progress_for_pyrogram,
-                    progress_args=progress_args,
-                )
-            elif media_type == "audio":
-                duration, artist, title, _, _ = await get_media_info(media_path)
-                await bot.send_audio(
-                    chat_id=message.chat.id,
-                    audio=media_path,
-                    duration=duration,
-                    performer=artist,
-                    title=title,
-                    caption=caption or "",
-                    progress=Leaves.progress_for_pyrogram,
-                    progress_args=progress_args,
-                )
-            elif media_type == "document":
-                await bot.send_document(
-                    chat_id=message.chat.id,
-                    document=media_path,
-                    caption=caption or "",
-                    progress=Leaves.progress_for_pyrogram,
-                    progress_args=progress_args,
-                )
-            
+            await _send_once()
             return True
-
         except FloodWait as e:
-            retry_count += 1
-            wait_time = e.value + 5
-            LOGGER(__name__).warning(f"FloodWait detected. Sleeping {wait_time}s. Retry {retry_count}/{MAX_RETRIES}")
-            await progress_message.edit(f"⏳ **FloodWait:** Sleeping {wait_time}s... (Retry {retry_count}/{MAX_RETRIES})")
-            if retry_count < MAX_RETRIES:
-                await asyncio.sleep(wait_time)
-            else:
-                return False
-
-        except Exception as e:
-            retry_count += 1
-            LOGGER(__name__).warning(f"Upload failed for {filename}: {e}")
+            wait_s = int(getattr(e, "value", 0) or 0)
+            wait_msg = get_readable_time(wait_s)
+            LOGGER(__name__).warning(f"FloodWait: Sleeping {wait_msg}")
+            try:
+                await progress_message.edit(f"⏳ **Telegram is throttling...**\nSleeping for `{wait_msg}` to stay safe.")
+            except:
+                pass
+            await asyncio.sleep(wait_s + 1)
             
-            if retry_count < MAX_RETRIES:
+            continue 
+        except Exception as e:
+            LOGGER(__name__).error(f"Upload failed: {e} (Attempt {retry_count}/{max_retries})")
+            if retry_count < max_retries:
                 try:
-                    await progress_message.edit(f"⚠️ **Upload Failed.** Retrying {retry_count}/{MAX_RETRIES}...")
+                    await progress_message.edit(f"⚠️ **Upload Error.**\nRetrying `{retry_count}/{max_retries-1}` in 3s...")
                 except:
                     pass
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
+                retry_count += 1
+                continue
             else:
-                LOGGER(__name__).error(f"Failed to upload {filename} after {MAX_RETRIES} attempts.")
                 try:
-                    await progress_message.edit(f"❌ **Upload Failed after {MAX_RETRIES} attempts.**\nReason: {e}")
+                    await progress_message.edit(f"❌ **Upload Failed.**\nMax retries reached. Error: {str(e)}")
                 except:
                     pass
                 return False
@@ -234,33 +234,51 @@ async def send_media(
     return False
 
 async def download_single_media(msg, progress_message, start_time, semaphore):
-    try:
-        filename = get_file_name(msg.id, msg)
-        
-        async with semaphore:
-            media_path = await msg.download(
-                progress=Leaves.progress_for_pyrogram,
-                progress_args=progressArgs(
-                    "📥 Downloading Progress", progress_message, start_time, filename
-                ),
+    filename = get_file_name(msg.id, msg)
+    
+    max_retries = 3
+    retry_count = 1
+
+    while retry_count <= max_retries:
+        try:
+            async with semaphore:
+                media_path = await msg.download(
+                    progress=Leaves.progress_for_pyrogram,
+                    progress_args=progressArgs(
+                        "📥 Downloading", progress_message, start_time, filename
+                    ),
+                )
+
+            parsed_caption = await get_parsed_msg(
+                msg.caption or "", msg.caption_entities
             )
 
-        parsed_caption = await get_parsed_msg(
-            msg.caption or "", msg.caption_entities
-        )
+            if msg.photo:
+                return ("success", media_path, InputMediaPhoto(media=media_path, caption=parsed_caption))
+            elif msg.video:
+                return ("success", media_path, InputMediaVideo(media=media_path, caption=parsed_caption))
+            elif msg.document:
+                return ("success", media_path, InputMediaDocument(media=media_path, caption=parsed_caption))
+            elif msg.audio:
+                return ("success", media_path, InputMediaAudio(media=media_path, caption=parsed_caption))
 
-        if msg.photo:
-            return ("success", media_path, InputMediaPhoto(media=media_path, caption=parsed_caption))
-        elif msg.video:
-            return ("success", media_path, InputMediaVideo(media=media_path, caption=parsed_caption))
-        elif msg.document:
-            return ("success", media_path, InputMediaDocument(media=media_path, caption=parsed_caption))
-        elif msg.audio:
-            return ("success", media_path, InputMediaAudio(media=media_path, caption=parsed_caption))
-
-    except Exception as e:
-        LOGGER(__name__).info(f"Error downloading media: {e}")
-        return ("error", None, None)
+        except FloodWait as e:
+            wait_s = int(getattr(e, "value", 0) or 0)
+            wait_msg = get_readable_time(wait_s)
+            LOGGER(__name__).warning(f"FloodWait downloading: Sleeping {wait_msg}")
+            try:
+                await progress_message.edit(f"⏳ **FloodWait:** Sleeping `{wait_msg}`...")
+            except:
+                pass
+            await asyncio.sleep(wait_s + 1)
+            continue
+        except Exception as e:
+            LOGGER(__name__).info(f"Error downloading: {e} (Attempt {retry_count})")
+            if retry_count < max_retries:
+                await asyncio.sleep(2)
+                retry_count += 1
+                continue
+            return ("error", None, None)
 
     return ("skip", None, None)
 
@@ -298,49 +316,50 @@ async def processMediaGroup(chat_message, bot, message, semaphore):
     LOGGER(__name__).info(f"Valid media count: {len(valid_media)}")
 
     if valid_media:
-        try:
-            await bot.send_media_group(chat_id=message.chat.id, media=valid_media)
-            await progress_message.delete()
-        except Exception:
+        sent_success = False
+        max_retries = 3
+        retry_count = 1
+
+        while retry_count <= max_retries:
+            try:
+                await bot.send_media_group(chat_id=message.chat.id, media=valid_media)
+                await progress_message.delete()
+                sent_success = True
+                break
+            except FloodWait as e:
+                wait_s = int(getattr(e, "value", 0) or 0)
+                wait_msg = get_readable_time(wait_s)
+                LOGGER(__name__).warning(f"FloodWait sending group: Sleeping {wait_msg}")
+                try:
+                    await progress_message.edit(f"⏳ **FloodWait:** Sleeping `{wait_msg}` before sending album...")
+                except:
+                    pass
+                await asyncio.sleep(wait_s + 1)
+                continue
+            except Exception as e:
+                LOGGER(__name__).error(f"Media group send failed: {e}")
+                if retry_count < max_retries:
+                    retry_count += 1
+                    await asyncio.sleep(2)
+                    continue
+                break
+        
+        if not sent_success:
             await message.reply(
                 "**❌ Failed to send media group, trying individual uploads**"
             )
             for media in valid_media:
                 try:
                     if isinstance(media, InputMediaPhoto):
-                        await bot.send_photo(
-                            chat_id=message.chat.id,
-                            photo=media.media,
-                            caption=media.caption,
-                        )
+                        await bot.send_photo(chat_id=message.chat.id, photo=media.media, caption=media.caption)
                     elif isinstance(media, InputMediaVideo):
-                        await bot.send_video(
-                            chat_id=message.chat.id,
-                            video=media.media,
-                            caption=media.caption,
-                        )
+                        await bot.send_video(chat_id=message.chat.id, video=media.media, caption=media.caption)
                     elif isinstance(media, InputMediaDocument):
-                        await bot.send_document(
-                            chat_id=message.chat.id,
-                            document=media.media,
-                            caption=media.caption,
-                        )
+                        await bot.send_document(chat_id=message.chat.id, document=media.media, caption=media.caption)
                     elif isinstance(media, InputMediaAudio):
-                        await bot.send_audio(
-                            chat_id=message.chat.id,
-                            audio=media.media,
-                            caption=media.caption,
-                        )
-                    elif isinstance(media, Voice):
-                        await bot.send_voice(
-                            chat_id=message.chat.id,
-                            voice=media.media,
-                            caption=media.caption,
-                        )
-                except Exception as individual_e:
-                    await message.reply(
-                        f"Failed to upload individual media: {individual_e}"
-                    )
+                        await bot.send_audio(chat_id=message.chat.id, audio=media.media, caption=media.caption)
+                except Exception as e:
+                    await message.reply(f"Failed to upload individual media: {e}")
 
             await progress_message.delete()
 
