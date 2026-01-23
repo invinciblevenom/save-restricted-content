@@ -7,7 +7,7 @@ from time import time
 from pyleaves import Leaves
 from pyrogram.enums import ParseMode
 from pyrogram import Client, compose, filters
-from pyrogram.errors import PeerIdInvalid, BadRequest
+from pyrogram.errors import PeerIdInvalid, BadRequest, FloodWait
 from pyrogram.types import Message
 
 from helpers.utils import (
@@ -147,13 +147,23 @@ async def handle_download(bot: Client, message: Message, post_url: str):
             async with download_semaphore:
                 await progress_message.edit(f"**📥 Downloading:** {filename}")
                 
-                media_path = await chat_message.download(
-                    file_name=download_path,
-                    progress=Leaves.progress_for_pyrogram,
-                    progress_args=progressArgs(
-                        "📥 Downloading", progress_message, start_time, filename
-                    ),
-                )
+                for attempt in range(2):
+                    try:
+                        media_path = await chat_message.download(
+                            file_name=download_path,
+                            progress=Leaves.progress_for_pyrogram,
+                            progress_args=progressArgs(
+                                "📥 Downloading", progress_message, start_time, filename
+                            ),
+                        )
+                        break
+                    except FloodWait as e:
+                        wait_s = int(getattr(e, "value", 0) or 0)
+                        LOGGER(__name__).warning(f"FloodWait while downloading media: {wait_s}s")
+                        if wait_s > 0 and attempt == 0:
+                            await asyncio.sleep(wait_s + 1)
+                            continue
+                        raise
 
             if not media_path or not os.path.exists(media_path):
                 await progress_message.edit("**❌ Download failed: File not saved properly**")
@@ -199,6 +209,12 @@ async def handle_download(bot: Client, message: Message, post_url: str):
 
     except (PeerIdInvalid, BadRequest, KeyError):
         await message.reply("**Make sure the user client is part of the chat.**")
+    except FloodWait as e:
+        wait_s = int(getattr(e, "value", 0) or 0)
+        LOGGER(__name__).warning(f"FloodWait in handle_download: {wait_s}s")
+        if wait_s > 0:
+            await asyncio.sleep(wait_s + 1)
+        return
     except Exception as e:
         error_message = f"**❌ {str(e)}**"
         await message.reply(error_message)
@@ -251,6 +267,7 @@ async def download_range(bot: Client, message: Message):
     downloaded = skipped = failed = 0
     batch_tasks = []
     BATCH_SIZE = PyroConf.BATCH_SIZE
+    processed_media_groups = set()
 
     for msg_id in range(start_id, end_id + 1):
         url = f"{prefix}/{msg_id}"
@@ -259,6 +276,12 @@ async def download_range(bot: Client, message: Message):
             if not chat_msg:
                 skipped += 1
                 continue
+            
+            if chat_msg.media_group_id:
+                if chat_msg.media_group_id in processed_media_groups:
+                    skipped += 1
+                    continue
+                processed_media_groups.add(chat_msg.media_group_id)
 
             has_media = bool(chat_msg.media_group_id or chat_msg.media)
             has_text  = bool(chat_msg.text or chat_msg.caption)
