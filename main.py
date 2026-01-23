@@ -147,7 +147,10 @@ async def handle_download(bot: Client, message: Message, post_url: str):
             async with download_semaphore:
                 await progress_message.edit(f"**📥 Downloading:** {filename}")
                 
-                for attempt in range(2):
+                max_retries = 3
+                retry_count = 1
+                
+                while retry_count <= max_retries:
                     try:
                         media_path = await chat_message.download(
                             file_name=download_path,
@@ -159,11 +162,21 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                         break
                     except FloodWait as e:
                         wait_s = int(getattr(e, "value", 0) or 0)
+                        wait_msg = get_readable_time(wait_s)
                         LOGGER(__name__).warning(f"FloodWait while downloading media: {wait_s}s")
-                        if wait_s > 0 and attempt == 0:
-                            await asyncio.sleep(wait_s + 1)
-                            continue
-                        raise
+                        try:
+                            await progress_message.edit(f"⏳ **FloodWait:** Sleeping `{wait_msg}`...")
+                        except:
+                            pass
+                        await asyncio.sleep(wait_s + 1)
+                        continue 
+                    except Exception as e:
+                        LOGGER(__name__).error(f"Download Error: {e}")
+                        if retry_count < max_retries:
+                             await asyncio.sleep(2)
+                             retry_count += 1
+                             continue
+                        break
 
             if not media_path or not os.path.exists(media_path):
                 await progress_message.edit("**❌ Download failed: File not saved properly**")
@@ -267,6 +280,7 @@ async def download_range(bot: Client, message: Message):
     downloaded = skipped = failed = 0
     batch_tasks = []
     BATCH_SIZE = PyroConf.BATCH_SIZE
+    
     processed_media_groups = set()
 
     for msg_id in range(start_id, end_id + 1):
