@@ -1,5 +1,8 @@
 import asyncio
 from pyrogram import Client
+import nest_asyncio
+
+nest_asyncio.apply()
 
 async def main():
     api_id = input("Enter your API ID: ")
@@ -15,7 +18,5 @@ async def main():
         print("\nYour Session String:\n")
         print(session)
 
-import nest_asyncio
-nest_asyncio.apply()
-
-await main()
+if __name__ == "__main__":
+    asyncio.run(main())main()
