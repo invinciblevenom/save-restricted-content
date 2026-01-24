@@ -142,7 +142,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
             progress_message = await message.reply("**⏳ Queueing Download...**")
 
             filename = get_file_name(message_id, chat_message)
-            download_path = get_download_path(message.id, filename)
+            download_path = get_download_path(message_id, filename)
 
             async with download_semaphore:
                 await progress_message.edit(f"**📥 Downloading:** {filename}")

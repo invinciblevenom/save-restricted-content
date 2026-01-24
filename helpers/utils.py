@@ -18,7 +18,8 @@ from pyrogram.errors import FloodWait
 from helpers.files import (
     fileSizeLimit,
     cleanup_download,
-    get_readable_time
+    get_readable_time,
+    get_download_path
 )
 
 from helpers.msg import (
@@ -236,6 +237,8 @@ async def send_media(
 async def download_single_media(msg, progress_message, start_time, semaphore):
     filename = get_file_name(msg.id, msg)
     
+    download_path = get_download_path(msg.id, filename)
+    
     max_retries = 3
     retry_count = 1
 
@@ -243,6 +246,7 @@ async def download_single_media(msg, progress_message, start_time, semaphore):
         try:
             async with semaphore:
                 media_path = await msg.download(
+                    file_name=download_path,
                     progress=Leaves.progress_for_pyrogram,
                     progress_args=progressArgs(
                         "📥 Downloading", progress_message, start_time, filename
