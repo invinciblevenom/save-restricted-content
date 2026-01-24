@@ -165,7 +165,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                         wait_msg = get_readable_time(wait_s)
                         LOGGER(__name__).warning(f"FloodWait while downloading media: {wait_s}s")
                         try:
-                            await progress_message.edit(f"⏳ **FloodWait:** Sleeping `{wait_msg}`...")
+                            await progress_message.edit(f"⏳ **FloodWait:** Sleeping {wait_msg}...")
                         except:
                             pass
                         await asyncio.sleep(wait_s + 1)
