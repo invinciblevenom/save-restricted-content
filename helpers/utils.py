@@ -1,4 +1,5 @@
 import os
+import sys
 import asyncio
 from time import time
 from asyncio.subprocess import PIPE
@@ -10,7 +11,6 @@ from pyrogram.types import (
     InputMediaVideo,
     InputMediaDocument,
     InputMediaAudio,
-    Voice,
 )
 
 from pyrogram.errors import FloodWait
@@ -99,34 +99,56 @@ async def get_video_thumbnail(video_file, duration):
     os.makedirs("Assets", exist_ok=True)
     output = os.path.join("Assets", "video_thumb.jpg")
 
-    if duration is None:
-        duration = (await get_media_info(video_file))[0]
-    if not duration:
-        duration = 3
-    duration //= 2
-
     if os.path.exists(output):
         try:
             os.remove(output)
         except:
             pass
 
-    cmd = [
+    if duration is None:
+        duration = (await get_media_info(video_file))[0]
+    if not duration:
+        duration = 3
+    
+    seek_time = duration * 0.15 
+
+    cmd_generate = [
         "ffmpeg", "-hide_banner", "-loglevel", "error",
-        "-ss", str(duration), "-i", video_file,
+        "-ss", str(seek_time), "-i", video_file,
         "-vframes", "1", "-q:v", "2",
         "-y", output,
     ]
+    
     try:
-        _, err, code = await cmd_exec(cmd)
+        _, err, code = await cmd_exec(cmd_generate)
         
-        if code != 0 or not os.path.exists(output):
-            LOGGER(__name__).warning(f"Thumbnail generation failed: {err}")
-            return None
+        if code == 0 and os.path.exists(output) and os.path.getsize(output) > 1000:
+            return output
+        else:
+            LOGGER(__name__).warning(f"Thumbnail generation failed for {os.path.basename(video_file)}. Trying fallback...")
     except Exception as e:
-        LOGGER(__name__).warning(f"Thumbnail generation error: {e}")
-        return None
-    return output
+        LOGGER(__name__).warning(f"Thumbnail generation error: {e}. Trying fallback...")
+
+    if os.path.exists(output):
+        try: os.remove(output)
+        except: pass
+
+    cmd_extract = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-i", video_file, "-map", "0:v", "-map", "-0:V",
+        "-c", "copy", "-vframes", "1", output
+    ]
+
+    try:
+        _, _, code = await cmd_exec(cmd_extract)
+        if code == 0 and os.path.exists(output) and os.path.getsize(output) > 1000:
+            LOGGER(__name__).info(f"Fallback: Used embedded thumbnail for {os.path.basename(video_file)}")
+            return output
+    except Exception:
+        pass
+    
+    LOGGER(__name__).warning(f"All thumbnail methods failed for {os.path.basename(video_file)}")
+    return None
 
 def progressArgs(action: str, progress_message, start_time, filename: str = None):
     if filename:
@@ -163,7 +185,9 @@ async def send_media(
             duration, _, _, width, height = await get_media_info(media_path)
             if not duration: duration = 0
             if not width or not height: width, height = 640, 480
+            
             thumb = await get_video_thumbnail(media_path, duration)
+            
             await bot.send_video(
                 chat_id=message.chat.id,
                 video=media_path,
@@ -209,12 +233,30 @@ async def send_media(
             wait_msg = get_readable_time(wait_s)
             LOGGER(__name__).warning(f"FloodWait: Sleeping {wait_msg}")
             try:
-                await progress_message.edit(f"⏳ **Telegram is throttling...**\nSleeping for `{wait_msg}` to stay safe.")
+                await progress_message.edit(f"⏳ **Telegram is throttling...**\nSleeping for `{wait_msg}`.")
             except:
                 pass
             await asyncio.sleep(wait_s + 1)
-            
             continue 
+            
+        except OSError as e:
+            LOGGER(__name__).error(f"Network/Socket Error: {e} (Attempt {retry_count}/{max_retries})")
+
+            error_str = str(e).lower()
+            if "socket" in error_str or "broken pipe" in error_str or "connection reset" in error_str:
+                 if retry_count == max_retries:
+                     LOGGER(__name__).critical("Persistent Network Failure. Stopping Bot.")
+                     try:
+                         await progress_message.edit(f"❌ **Critical Network Error.**\nStopping Bot.")
+                     except:
+                         pass
+                     sys.exit(1)
+                 
+                 await asyncio.sleep(10)
+            
+            retry_count += 1
+            continue
+
         except Exception as e:
             LOGGER(__name__).error(f"Upload failed: {e} (Attempt {retry_count}/{max_retries})")
             if retry_count < max_retries:
@@ -227,7 +269,7 @@ async def send_media(
                 continue
             else:
                 try:
-                    await progress_message.edit(f"❌ **Upload Failed.**\nMax retries reached. Error: {str(e)}")
+                    await progress_message.edit(f"❌ **Upload Failed.**\nMax retries reached.")
                 except:
                     pass
                 return False
@@ -236,7 +278,6 @@ async def send_media(
 
 async def download_single_media(msg, progress_message, start_time, semaphore):
     filename = get_file_name(msg.id, msg)
-    
     download_path = get_download_path(msg.id, filename)
     
     max_retries = 3
