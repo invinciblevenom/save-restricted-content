@@ -305,6 +305,8 @@ async def download_range(bot: Client, message: Message):
 
             task = track_task(handle_download(bot, message, url))
             batch_tasks.append(task)
+            
+            await asyncio.sleep(0.5) 
 
             if len(batch_tasks) >= BATCH_SIZE:
                 results = await asyncio.gather(*batch_tasks, return_exceptions=True)
