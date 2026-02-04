@@ -12,7 +12,7 @@ from pyrogram.types import (
     InputMediaAudio,
 )
 
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, Timeout
 
 from helpers.files import (
     fileSizeLimit,
@@ -213,8 +213,18 @@ async def send_media(
             except:
                 pass
             await asyncio.sleep(wait_s + 1)
+            continue
             
-            continue 
+        except (Timeout, TimeoutError):
+            LOGGER(__name__).warning(f"TimeoutError: Request timed out. Retrying ({retry_count}/{max_retries})")
+            try:
+                await progress_message.edit(f"⚠️ **Network Timeout.**\nRetrying `{retry_count}/{max_retries}`...")
+            except:
+                pass
+            await asyncio.sleep(5)
+            retry_count += 1
+            continue
+            
         except Exception as e:
             LOGGER(__name__).error(f"Upload failed: {e} (Attempt {retry_count}/{max_retries})")
             if retry_count < max_retries:
