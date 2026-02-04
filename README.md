@@ -28,10 +28,10 @@ To begin using bot, ensure you already have following:
 
 ## Configuration
 
-Performance settings (change in `config.py`):
-   - **`MAX_CONCURRENT_DOWNLOADS`**: Number of simultaneous downloads (default: 3)
-   - **`MAX_CONCURRENT_UPLOADS`**: Number of simultaneous uploads (default: 2)
-   - **`BATCH_SIZE`**: Number of posts to process in parallel during batch downloads (default: 5)
+Performance settings. Change in `config.py` only if you don't mind rearranging files later:
+   - **`MAX_CONCURRENT_DOWNLOADS`**: Number of simultaneous downloads (default: 1)
+   - **`MAX_CONCURRENT_UPLOADS`**: Number of simultaneous uploads (default: 1)
+   - **`BATCH_SIZE`**: Number of posts to process in parallel during batch downloads (default: 1)
    - **`FLOOD_WAIT_DELAY`**: Delay in seconds between batch groups to avoid flood limits (default: 10)
 
 ## Deploy the Bot
