@@ -40,7 +40,7 @@ bot = Client(
     bot_token=PyroConf.BOT_TOKEN,
     workers=100,
     parse_mode=ParseMode.MARKDOWN,
-    max_concurrent_transmissions=1,
+    max_concurrent_transmissions=PyroConf.MAX_CONCURRENT_UPLOADS, 
     sleep_threshold=60,
 )
 
@@ -48,7 +48,7 @@ user = Client(
     "user_session",
     workers=100,
     session_string=PyroConf.SESSION_STRING,
-    max_concurrent_transmissions=1,
+    max_concurrent_transmissions=PyroConf.MAX_CONCURRENT_DOWNLOADS,
     sleep_threshold=60,
 )
 
