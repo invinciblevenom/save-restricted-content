@@ -131,7 +131,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
         else:
             chat_id, message_id = getChatMsgID(post_url)
             chat_message = await user.get_messages(chat_id=chat_id, message_ids=message_id)
-            LOGGER(__name__).info(f"Downloading URL: {post_url}")
+        LOGGER(__name__).info(f"Downloading URL: {post_url}")
 
         if not chat_message or chat_message.empty:
              await message.reply("**❌ Message not found or inaccessible.**")
@@ -422,7 +422,7 @@ async def cancel_all_tasks(_, message: Message):
     await message.reply(f"**Cancelled {cancelled} running task(s).**")
 
 if __name__ == "__main__":
-    LOGGER(__name__).info("Starting Clients...")
+    LOGGER(__name__).info("Bot Started")
     try:
         compose([bot, user])
     except KeyboardInterrupt:
