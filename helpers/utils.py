@@ -147,7 +147,7 @@ async def send_media(
         return False
 
     filename = os.path.basename(media_path)
-    LOGGER(__name__).info(f"Uploading media: {filename} ({media_type})")
+    LOGGER(__name__).info(f"Uploading media: {filename}")
     progress_args = progressArgs("📥 Uploading", progress_message, start_time, filename)
 
     async def _send_once():
