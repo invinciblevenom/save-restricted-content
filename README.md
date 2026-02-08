@@ -19,7 +19,7 @@ To begin using bot, ensure you already have following:
 - A Telegram bot token (you can get one from [@BotFather](https://t.me/BotFather) on Telegram)
 - API ID and Hash: You can get these by creating an application on [my.telegram.org](https://my.telegram.org) 
 
-> **Warning**: This is irreversible process, API ID and Hash can only be deleted by deleting your Telegram account. Never share your credentials.
+> **Warning**: This is an irreversible process, API ID and API Hash can only be deleted by deleting your Telegram account. Never share your credentials.
 
 - To Get `SESSION_STRING` run `session-string.py` in Colab and follow instructions. 
 
@@ -28,11 +28,13 @@ To begin using bot, ensure you already have following:
 
 ## Configuration
 
-Performance settings. Change in `config.py` only if you don't mind rearranging files later:
+Performance settings:
    - **`MAX_CONCURRENT_DOWNLOADS`**: Number of simultaneous downloads (default: 1)
    - **`MAX_CONCURRENT_UPLOADS`**: Number of simultaneous uploads (default: 1)
    - **`BATCH_SIZE`**: Number of posts to process in parallel during batch downloads (default: 1)
-   - **`FLOOD_WAIT_DELAY`**: Delay in seconds between batch groups to avoid flood limits (default: 10)
+   - **`FLOOD_WAIT_DELAY`**: Delay in seconds between batch groups to avoid flood limits (default: 5)
+   
+> **Note**: Change in `config.py` only if you don't mind rearranging files later.
 
 ## Deploy the Bot
 
@@ -68,8 +70,8 @@ Follow below steps for deployment:
 - **`/batch <start_link> <end_link>`** – Batch-download a range of posts in one go.  
 
   > 💡 Example: `/batch https://t.me/mychannel/100 https://t.me/mychannel/120`  
-- **`/stop`** – Stop all pending downloads if the bot hangs.  
-- **`/logs`** – Download the bot’s logs file.  
+- **`/stop`** – Stop all pending downloads.  
+- **`/logs`** – Download the bot’s log file.  
 - **`/stats`** – View current status (uptime, disk, memory, network, CPU, etc.).  
 
 > **Note:** Make sure that your user session is a member of the source chat or channel before downloading.
