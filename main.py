@@ -1,7 +1,9 @@
 import os
+import math
 import shutil
 import psutil
 import asyncio
+import re
 from time import time
 
 from pyleaves import Leaves
@@ -56,6 +58,23 @@ RUNNING_TASKS = set()
 download_semaphore = None
 upload_semaphore = None
 
+def format_size(size_bytes):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_name[i]}"
+
+def get_semaphores():
+    global download_semaphore, upload_semaphore
+    if download_semaphore is None:
+        download_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_DOWNLOADS)
+    if upload_semaphore is None:
+        upload_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_UPLOADS)
+    return download_semaphore, upload_semaphore
+
 def track_task(coro):
     task = asyncio.create_task(coro)
     RUNNING_TASKS.add(task)
@@ -80,7 +99,7 @@ async def start(_, message: Message):
 @bot.on_message(filters.command("help") & filters.private)
 async def help_command(_, message: Message):
     help_text = (
-        "💡 **Media Downloader Bot Help**\n\n"
+        "💡 **Save Restricted Content Bot Help**\n\n"
         "➤ **Download Media**\n"
         "   – Send `/dl <post_URL>` **or** just paste a Telegram post link to fetch photos, videos, audio, or documents.\n\n"
         "➤ **Batch Download**\n"
@@ -92,23 +111,31 @@ async def help_command(_, message: Message):
         "➤ **If the bot hangs**\n"
         "   – Send `/stop` to cancel any pending downloads.\n\n"
         "➤ **Logs**\n"
-        "   – Send `/logs` to download the bot’s logs file.\n\n"
+        "   – Send `/logs` to download the bot’s log file.\n\n"
         "➤ **Stats**\n"
         "   – Send `/stats` to view current status:\n\n"
     )
     await message.reply(help_text, disable_web_page_preview=True)
 
-async def handle_download(bot: Client, message: Message, post_url: str):
+async def handle_download(bot: Client, message: Message, post_url: str, pre_fetched_msg: Message = None):
     if "?" in post_url:
         post_url = post_url.split("?", 1)[0]
 
     media_path = None 
+    dl_sem, up_sem = get_semaphores()
 
     try:
-        chat_id, message_id = getChatMsgID(post_url)
-        chat_message = await user.get_messages(chat_id=chat_id, message_ids=message_id)
+        if pre_fetched_msg:
+            chat_message = pre_fetched_msg
+            message_id = chat_message.id
+        else:
+            chat_id, message_id = getChatMsgID(post_url)
+            chat_message = await user.get_messages(chat_id=chat_id, message_ids=message_id)
+            LOGGER(__name__).info(f"Downloading URL: {post_url}")
 
-        LOGGER(__name__).info(f"Processing URL: {post_url}")
+        if not chat_message or chat_message.empty:
+             await message.reply("**❌ Message not found or inaccessible.**")
+             return
 
         if chat_message.document or chat_message.video or chat_message.audio:
             file_size = (
@@ -131,7 +158,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
         )
 
         if chat_message.media_group_id:
-            if not await processMediaGroup(chat_message, bot, message, download_semaphore):
+            if not await processMediaGroup(chat_message, bot, message, dl_sem):
                 await message.reply(
                     "**Could not extract any valid media from the media group.**"
                 )
@@ -144,7 +171,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
             filename = get_file_name(message_id, chat_message)
             download_path = get_download_path(message_id, filename)
 
-            async with download_semaphore:
+            async with dl_sem:
                 await progress_message.edit(f"**📥 Downloading:** {filename}")
                 
                 max_retries = 3
@@ -187,7 +214,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                 await progress_message.edit("**❌ Download failed: File is empty**")
                 return
 
-            LOGGER(__name__).info(f"Downloaded media: {os.path.basename(media_path)} (Size: {file_size} bytes)")
+            LOGGER(__name__).info(f"Downloaded media: {os.path.basename(media_path)} (Size: {format_size(file_size)})")
             
             await progress_message.edit("**⏳ Waiting for Upload...**")
 
@@ -201,7 +228,7 @@ async def handle_download(bot: Client, message: Message, post_url: str):
                 else "document"
             )
             
-            async with upload_semaphore:
+            async with up_sem:
                 upload_success = await send_media(
                     bot,
                     message,
@@ -303,7 +330,7 @@ async def download_range(bot: Client, message: Message):
                 skipped += 1
                 continue
 
-            task = track_task(handle_download(bot, message, url))
+            task = track_task(handle_download(bot, message, url, pre_fetched_msg=chat_msg))
             batch_tasks.append(task)
             
             if len(batch_tasks) >= BATCH_SIZE:
@@ -346,7 +373,7 @@ async def download_range(bot: Client, message: Message):
 
 @bot.on_message(filters.private & ~filters.command(["start", "help", "dl", "stats", "logs", "stop"]))
 async def handle_any_message(bot: Client, message: Message):
-    if message.text and not message.text.startswith("/"):
+    if message.text and re.search(r"t\.me\/", message.text):
         await track_task(handle_download(bot, message, message.text))
 
 @bot.on_message(filters.command("stats") & filters.private)
@@ -394,23 +421,13 @@ async def cancel_all_tasks(_, message: Message):
             cancelled += 1
     await message.reply(f"**Cancelled {cancelled} running task(s).**")
 
-async def initialize():
-    global download_semaphore, upload_semaphore
-    download_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_DOWNLOADS)
-    upload_semaphore = asyncio.Semaphore(PyroConf.MAX_CONCURRENT_UPLOADS)
-    LOGGER(__name__).info("Bot Started!")
-
 if __name__ == "__main__":
+    LOGGER(__name__).info("Starting Clients...")
     try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(initialize())
-
-        LOGGER(__name__).info("Starting Clients...")
         compose([bot, user])
-        
     except KeyboardInterrupt:
         pass
-    except Exception as err:
-        LOGGER(__name__).error(err)
+    except Exception as e:
+        LOGGER(__name__).error(f"Bot Crashed: {e}")
     finally:
         LOGGER(__name__).info("Bot Stopped")
