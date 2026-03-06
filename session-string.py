@@ -19,4 +19,4 @@ async def main():
         print(session)
 
 if __name__ == "__main__":
-    asyncio.run(main())main()
+    asyncio.run(main())
