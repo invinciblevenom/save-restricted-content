@@ -38,8 +38,8 @@ async def custom_progress(current, total, action, progress_message, start_time, 
     state_dict['last_update'] = current_time
 
     percentage = (current / total) * 100
-    filled = int(percentage / 10)
-    bar = "■" * filled + "□" * (10 - filled)
+    filled = int(percentage / 15)
+    bar = "■" * filled + "□" * (15 - filled)
     
     elapsed_time = current_time - start_time
     speed = current / elapsed_time if elapsed_time > 0 else 0
