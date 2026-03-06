@@ -5,8 +5,6 @@ import psutil
 import asyncio
 import re
 from time import time
-
-from pyleaves import Leaves
 from pyrogram.enums import ParseMode
 from pyrogram import Client, compose, filters
 from pyrogram.errors import PeerIdInvalid, BadRequest, FloodWait
@@ -14,7 +12,7 @@ from pyrogram.types import Message
 
 from helpers.utils import (
     processMediaGroup,
-    progressArgs,
+    custom_progress,
     send_media
 )
 
@@ -176,15 +174,15 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                 
                 max_retries = 3
                 retry_count = 1
+                state_dict = {'last_update': 0}
+                prog_args = ("📥 Downloading", progress_message, start_time, filename, state_dict)
                 
                 while retry_count <= max_retries:
                     try:
                         media_path = await chat_message.download(
                             file_name=download_path,
-                            progress=Leaves.progress_for_pyrogram,
-                            progress_args=progressArgs(
-                                "📥 Downloading", progress_message, start_time, filename
-                            ),
+                            progress=custom_progress,
+                            progress_args=prog_args,
                         )
                         break
                     except FloodWait as e:
