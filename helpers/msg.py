@@ -2,6 +2,9 @@ import re
 from pyrogram.parser import Parser
 from pyrogram.utils import get_channel_id
 
+PREFIX_NUM_UNDERSCORE_RE = re.compile(r'^\d+_')
+PREFIX_NUM_LETTER_RE = re.compile(r'^(\d+)\s*([a-zA-Z])')
+PREFIX_NUM_SPACE_RE = re.compile(r'^\d+ ')
 
 async def get_parsed_msg(text, entities):
     return Parser.unparse(text, entities or [], is_html=False)
@@ -44,17 +47,17 @@ def get_file_name(message_id: int, chat_message) -> str:
         if not name:
             return ""
 
-        name = re.sub(r'^\d+_', '', name)
+        name = PREFIX_NUM_UNDERSCORE_RE.sub('', name)
 
         name = name.replace('_', ' ')
 
-        match = re.match(r'^(\d+)\s*([a-zA-Z])', name)
+        match = PREFIX_NUM_LETTER_RE.match(name)
         if match:
             prefix_num = match.group(1)
             rest_of_text = name[len(match.group(0))-1:] 
             name = f"{prefix_num}) {rest_of_text}"
 
-        if re.match(r'^\d+ ', name) and not name.startswith(f"{name.split(' ')[0]})"):
+        if PREFIX_NUM_SPACE_RE.match(name) and not name.startswith(f"{name.split(' ')[0]})"):
             parts = name.split(' ', 1)
             if len(parts) > 1:
                 name = f"{parts[0]}) {parts[1]}"
