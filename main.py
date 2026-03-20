@@ -154,6 +154,13 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
             chat_message.text or "", chat_message.entities
         )
 
+        has_downloadable_media = (
+            chat_message.document or chat_message.video or 
+            chat_message.audio or chat_message.photo or 
+            chat_message.animation or chat_message.voice or 
+            chat_message.video_note or chat_message.sticker
+        )
+
         if chat_message.media_group_id:
             if not await processMediaGroup(chat_message, bot, message, dl_sem):
                 await message.reply(
@@ -161,7 +168,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                 )
             return
 
-        elif chat_message.media:
+        elif has_downloadable_media:
             start_time = time()
             progress_message = await message.reply("**⏳ Queueing Download...**")
 
@@ -172,7 +179,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                 chat_message.document or chat_message.video or 
                 chat_message.audio or chat_message.photo or 
                 chat_message.animation or chat_message.voice or 
-                chat_message.video_note
+                chat_message.video_note or chat_message.sticker
             )
             pre_file_size = getattr(media_obj, "file_size", 0) if media_obj else 0
             
@@ -220,7 +227,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
             if file_size == 0:
                 await progress_message.edit("**❌ Download failed: File is empty**")
                 return
-
+            
             await progress_message.edit("**⏳ Waiting for Upload...**")
 
             media_type = (
@@ -248,10 +255,15 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                 await progress_message.delete()
                 LOGGER(__name__).info(f"Finished Processing: {post_url}")
 
-        elif chat_message.text or chat_message.caption:
-            await message.reply(parsed_text or parsed_caption)
+        elif chat_message.text:
+            await message.reply(
+                chat_message.text.html, 
+                parse_mode=ParseMode.HTML, 
+                disable_web_page_preview=True
+            )
+            LOGGER(__name__).info(f"Finished Processing: {post_url}")
         else:
-            await message.reply("**No media or text found in the post URL.**")
+            await message.reply("**No downloadable media or text found in the post URL.**")
 
     except (PeerIdInvalid, BadRequest, KeyError):
         await message.reply("**Make sure the user client is part of the chat.**")
