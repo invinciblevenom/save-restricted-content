@@ -32,7 +32,7 @@ async def custom_progress(current, total, action, progress_message, start_time, 
 
     current_time = time()
     
-    if (current_time - state_dict.get('last_update', 0)) < 5 and current != total:
+    if (current_time - state_dict.get('last_update', 0)) < 10 and current != total:
         return
         
     state_dict['last_update'] = current_time
