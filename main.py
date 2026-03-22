@@ -7,7 +7,7 @@ import re
 from time import time
 from pyrogram.enums import ParseMode
 from pyrogram import Client, compose, filters
-from pyrogram.errors import PeerIdInvalid, BadRequest, FloodWait
+from pyrogram.errors import PeerIdInvalid, BadRequest, FloodWait, FileReferenceExpired
 from pyrogram.types import Message
 
 from helpers.utils import (
@@ -210,6 +210,16 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                             pass
                         await asyncio.sleep(wait_s + 1)
                         continue 
+                    except FileReferenceExpired:
+                        LOGGER(__name__).warning(f"File reference expired for {filename}. Refetching message...")
+                        try:
+                            chat_id, msg_id = getChatMsgID(post_url)
+                            chat_message = await user.get_messages(chat_id=chat_id, message_ids=msg_id)
+                        except Exception as refetch_err:
+                            LOGGER(__name__).error(f"Failed to refetch message for {filename}: {refetch_err}")
+                        
+                        retry_count += 1
+                        continue
                     except Exception as e:
                         LOGGER(__name__).error(f"Download Error: {e}")
                         if retry_count < max_retries:
