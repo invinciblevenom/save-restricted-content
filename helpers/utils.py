@@ -28,11 +28,19 @@ from helpers.msg import (
 from logger import LOGGER
 
 def get_progress_text(filename, file_size="Unknown Size", batch_stats=None, warning=""):
+    if len(filename) > 50:
+        name_parts = filename.rsplit('.', 1)
+        if len(name_parts) == 2:
+            filename = f"{name_parts[0][:43]}...{name_parts[1]}"
+        else:
+            filename = f"{filename[:47]}..."
+
     if not batch_stats:
         text = (
-            f"> 📥 **PROCESSING FILE**\n"
-            f"> ├ **File:** `{filename}`\n"
-            f"> └ **Size:** `{file_size}`"
+            f"> 📥 **Processing**\n"
+            f">\n"
+            f"├ **File:** {filename}\n"
+            f"└ **Size:** {file_size}"
         )
         if warning:
             text += f"\n>\n> ⚠️ **{warning}**"
@@ -44,17 +52,21 @@ def get_progress_text(filename, file_size="Unknown Size", batch_stats=None, warn
     pct = (current / total) * 100 if total > 0 else 100
     
     text = (
-        f"> 📥 **PROCESSING**\n"
-        f"> ├ **File:** {filename}\n"
-        f"> └ **Size:** {file_size}\n"
+        f"> 📥 **Processing**\n"
         f">\n"
-        f"> 🚀 **PROGRESS: {pct:.1f}%**\n"
-        f"> ├ 📊 **Total Links:** {total}\n"
-        f"> ├ ⚡ **Current:** {current}\n"
-        f"> └ ⏳ **Remaining:** {rem}"
+        f"├ **File:** {filename}\n"
+        f"└ **Size:** {file_size}\n"
+        f"\n"
+        f"> 🚀 **Batch Progress: {pct:.1f}%**\n"
+        f">\n"
+        f"├ 📊 **Total Links:** {total}\n"
+        f"├ ⚡ **Current:** {current}\n"
+        f"└ ⏳ **Remaining:** {rem}"
     )
+    
     if warning:
         text += f"\n>\n> ⚠️ **{warning}**"
+        
     return text
 
 async def cmd_exec(cmd, shell=False):
