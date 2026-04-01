@@ -231,7 +231,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                             actual_size = os.path.getsize(media_path)
 
                             if pre_file_size > 0 and actual_size < pre_file_size:
-                                LOGGER(__name__).warning(f"Incomplete download for {filename} ({actual_size}/{pre_file_size} bytes). Refetching message...")
+                                LOGGER(__name__).warning(f"Download Incomplete: {post_url}. Refetching message...")
                                 
                                 os.remove(media_path)
                                 media_path = None
