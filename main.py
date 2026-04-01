@@ -114,7 +114,7 @@ async def help_command(_, message: Message):
     )
     await message.reply(help_text, disable_web_page_preview=True)
 
-async def handle_download(bot: Client, message: Message, post_url: str, pre_fetched_msg: Message = None):
+async def handle_download(bot: Client, message: Message, post_url: str, pre_fetched_msg: Message = None, fetch_time: float = None):
     if "?" in post_url:
         post_url = post_url.split("?", 1)[0]
 
@@ -184,6 +184,16 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
             LOGGER(__name__).info(f"Downloading media: {filename} (Size: {format_size(pre_file_size)})")
 
             async with dl_sem:
+                if pre_fetched_msg and fetch_time and (time() - fetch_time) > 7200:
+                    try:
+                        chat_id, msg_id = getChatMsgID(post_url)
+                        fresh_msg = await user.get_messages(chat_id=chat_id, message_ids=msg_id)
+                        if fresh_msg and not fresh_msg.empty:
+                            chat_message = fresh_msg
+                            fetch_time = time()
+                    except Exception as e:
+                        LOGGER(__name__).warning(f"Failed to refresh stale reference for {filename}: {e}")
+
                 progress_message = await message.reply(f"**📥 Downloading:** {filename}")
                 
                 max_retries = 3
@@ -362,6 +372,7 @@ async def download_range(bot: Client, message: Message):
     for i in range(0, len(all_ids), chunk_size):
         chunk_ids = all_ids[i:i + chunk_size]
         try:
+            chunk_fetch_time = time()
             messages = await user.get_messages(chat_id=start_chat, message_ids=chunk_ids)
             if not isinstance(messages, list):
                 messages = [messages]
@@ -404,7 +415,7 @@ async def download_range(bot: Client, message: Message):
                     skipped += 1
                     continue
 
-            task = track_task(handle_download(bot, message, url, pre_fetched_msg=chat_msg))
+            task = track_task(handle_download(bot, message, url, pre_fetched_msg=chat_msg, fetch_time=chunk_fetch_time))
             batch_tasks.append(task)
             
             if len(batch_tasks) >= BATCH_SIZE:

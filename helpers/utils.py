@@ -283,7 +283,7 @@ async def send_media(
     
     return False
 
-async def download_single_media(msg, progress_message, start_time, semaphore):
+async def download_single_media(msg, progress_message, start_time, semaphore, fetch_time=None):
     filename = get_file_name(msg.id, msg)
     
     download_path = get_download_path(msg.id, filename)
@@ -297,6 +297,15 @@ async def download_single_media(msg, progress_message, start_time, semaphore):
     while retry_count <= max_retries:
         try:
             async with semaphore:
+                if fetch_time and (time() - fetch_time) > 7200:
+                    try:
+                        fresh_msg = await msg._client.get_messages(chat_id=msg.chat.id, message_ids=msg.id)
+                        if fresh_msg and not fresh_msg.empty:
+                            msg = fresh_msg
+                            fetch_time = time()
+                    except Exception:
+                        pass
+
                 media_path = await msg.download(
                     file_name=download_path,
                     progress=custom_progress,
@@ -343,6 +352,7 @@ async def processMediaGroup(chat_message, bot, message, semaphore):
     invalid_paths = []
 
     start_time = time()
+    group_fetch_time = time()
     progress_message = await message.reply("📥 Downloading media group...")
     LOGGER(__name__).info(
         f"Downloading media group with {len(media_group_messages)} items..."
@@ -351,7 +361,7 @@ async def processMediaGroup(chat_message, bot, message, semaphore):
     download_tasks = []
     for msg in media_group_messages:
         if msg.photo or msg.video or msg.document or msg.audio:
-            download_tasks.append(download_single_media(msg, progress_message, start_time, semaphore))
+            download_tasks.append(download_single_media(msg, progress_message, start_time, semaphore, group_fetch_time))
 
     results = await asyncio.gather(*download_tasks, return_exceptions=True)
 
