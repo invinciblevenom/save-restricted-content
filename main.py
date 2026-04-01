@@ -115,6 +115,7 @@ async def help_command(_, message: Message):
     await message.reply(help_text, disable_web_page_preview=True)
 
 async def handle_download(bot: Client, message: Message, post_url: str, pre_fetched_msg: Message = None, fetch_time: float = None, progress_msg: Message = None, batch_stats: dict = None):
+    task_start_time = time()
     if "?" in post_url:
         post_url = post_url.split("?", 1)[0]
 
@@ -161,11 +162,11 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
             if progress_msg and batch_stats:
                 batch_stats["processed"] += 1
                 try:
-                    await progress_msg.edit(get_progress_text("Media Group", batch_stats))
+                    await progress_msg.edit(get_progress_text("Media Group", "Multiple Files", batch_stats))
                 except Exception:
                     pass
             elif not progress_msg:
-                progress_msg = await message.reply(get_progress_text("Media Group"))
+                progress_msg = await message.reply(get_progress_text("Media Group", "Multiple Files"))
 
             if not await processMediaGroup(chat_message, bot, message, dl_sem, progress_msg, batch_stats):
                 if progress_msg:
@@ -193,8 +194,9 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                 chat_message.video_note or chat_message.sticker
             )
             pre_file_size = getattr(media_obj, "file_size", 0) if media_obj else 0
+            file_size_str = format_size(pre_file_size)
             
-            LOGGER(__name__).info(f"Downloading media: {filename} (Size: {format_size(pre_file_size)})")
+            LOGGER(__name__).info(f"Downloading media: {filename} (Size: {file_size_str})")
 
             async with dl_sem:
                 if pre_fetched_msg and fetch_time and (time() - fetch_time) > 7200:
@@ -210,11 +212,11 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                 if progress_msg and batch_stats:
                     batch_stats["processed"] += 1
                     try:
-                        await progress_msg.edit(get_progress_text(filename, batch_stats))
+                        await progress_msg.edit(get_progress_text(filename, file_size_str, batch_stats))
                     except Exception:
                         pass
                 elif not progress_msg:
-                    progress_msg = await message.reply(get_progress_text(filename))
+                    progress_msg = await message.reply(get_progress_text(filename, file_size_str))
                 
                 max_retries = 3
                 retry_count = 1
@@ -250,7 +252,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                         LOGGER(__name__).warning(f"FloodWait while downloading media: {wait_s}s")
                         if progress_msg:
                             try:
-                                await progress_msg.edit(get_progress_text(filename, batch_stats, f"⏳ **Rate Limited:** Pausing for {wait_msg}..."))
+                                await progress_msg.edit(get_progress_text(filename, file_size_str, batch_stats, f"⏳ Rate Limited: Pausing for {wait_msg}..."))
                             except Exception:
                                 pass
                         await asyncio.sleep(wait_s + 1)
@@ -325,7 +327,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
             if batch_stats:
                 batch_stats["processed"] += 1
                 try:
-                    await progress_msg.edit(get_progress_text("Text Message", batch_stats))
+                    await progress_msg.edit(get_progress_text("Text Message", "N/A", batch_stats))
                 except Exception:
                     pass
             await message.reply(
@@ -354,6 +356,10 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
     finally:
         if media_path:
             cleanup_download(media_path)
+        
+        elapsed = time() - task_start_time
+        if elapsed < 2.0:
+            await asyncio.sleep(2.0 - elapsed)
 
 @bot.on_message(filters.command("dl") & filters.private)
 async def download_media(bot: Client, message: Message):
@@ -399,6 +405,10 @@ async def download_range(bot: Client, message: Message):
 
     prefix = args[1].rsplit("/", 1)[0]
     loading = await message.reply(f"📥 **Started Batch Processing...**")
+    try:
+        await loading.pin(disable_notification=True)
+    except Exception:
+        pass
 
     downloaded = skipped = failed = 0
     batch_tasks = []
@@ -478,6 +488,10 @@ async def download_range(bot: Client, message: Message):
                 results = await asyncio.gather(*batch_tasks, return_exceptions=True)
                 for result in results:
                     if isinstance(result, asyncio.CancelledError):
+                        try:
+                            await loading.unpin()
+                        except Exception:
+                            pass
                         await loading.delete()
                         return await message.reply(
                             f"**❌ Batch canceled** after downloading `{downloaded}` posts."
@@ -499,13 +513,17 @@ async def download_range(bot: Client, message: Message):
             else:
                 downloaded += 1
 
+    try:
+        await loading.unpin()
+    except Exception:
+        pass
     await loading.delete()
     await message.reply(
         "**✅ Batch Process Completed!**\n"
         "━━━━━━━━━━━━━━━━━━━\n"
-        f"📥 **Downloaded** : `{downloaded}` post(s)\n"
-        f"⏭️ **Skipped** : `{skipped}` (no content or filtered)\n"
-        f"❌ **Failed** : `{failed}` error(s)"
+        f"📥 **Downloaded** : {downloaded} post(s)\n"
+        f"⏭️ **Skipped** : {skipped} (no content or filtered)\n"
+        f"❌ **Failed** : {failed} error(s)"
     )
 
 @bot.on_message(filters.private & ~filters.command(["start", "help", "dl", "stats", "logs", "stop"]))
@@ -529,15 +547,15 @@ async def stats(_, message: Message):
 
     stats = (
         "**Bot's Live and Running Successfully.**\n\n"
-        f"**➜ Bot Uptime:** `{currentTime}`\n"
-        f"**➜ Free Disk Space:** `{free}`\n"
-        f"**➜ Total Disk Space:** `{total}`\n"
-        f"**➜ Memory Usage:** `{round(process.memory_info()[0] / 1024**2)} MiB`\n\n"
-        f"**➜ Uploaded:** `{sent}`\n"
-        f"**➜ Downloaded:** `{recv}`\n\n"
-        f"**➜ CPU:** `{cpuUsage}%` | "
-        f"**➜ RAM:** `{memory}%` | "
-        f"**➜ DISK:** `{disk}%`"
+        f"**➜ Bot Uptime:** {currentTime}\n"
+        f"**➜ Free Disk Space:** {free}\n"
+        f"**➜ Total Disk Space:** {total}\n"
+        f"**➜ Memory Usage:** {round(process.memory_info()[0] / 1024**2)} MiB\n\n"
+        f"**➜ Uploaded:** {sent}\n"
+        f"**➜ Downloaded:** {recv}\n\n"
+        f"**➜ CPU:** {cpuUsage}% | "
+        f"**➜ RAM:** {memory}% | "
+        f"**➜ DISK:** {disk}%"
     )
     await message.reply(stats)
 

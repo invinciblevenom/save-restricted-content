@@ -17,7 +17,8 @@ from helpers.files import (
     fileSizeLimit,
     cleanup_download,
     get_readable_time,
-    get_download_path
+    get_download_path,
+    get_readable_file_size
 )
 
 from helpers.msg import (
@@ -26,11 +27,15 @@ from helpers.msg import (
 )
 from logger import LOGGER
 
-def get_progress_text(filename, batch_stats=None, warning=""):
+def get_progress_text(filename, file_size="Unknown Size", batch_stats=None, warning=""):
     if not batch_stats:
-        text = f"**📥 Processing:** {filename}"
+        text = (
+            f"> 📥 **PROCESSING FILE**\n"
+            f"> ├ **File:** `{filename}`\n"
+            f"> └ **Size:** `{file_size}`"
+        )
         if warning:
-            text += f"\n\n{warning}"
+            text += f"\n>\n> ⚠️ **{warning}**"
         return text
 
     current = batch_stats["processed"]
@@ -39,14 +44,17 @@ def get_progress_text(filename, batch_stats=None, warning=""):
     pct = (current / total) * 100 if total > 0 else 100
     
     text = (
-        f"🚀 Batch Progress: {pct:.1f}%\n\n"
-        f"├ 📊 Total Links: {total}\n"
-        f"├ ⚡ Currently On: {current}\n"
-        f"├ ⏳ Remaining Links: {rem}\n\n"
-        f"📥 Processing: {filename}"
+        f"> 📥 **PROCESSING**\n"
+        f"> ├ **File:** {filename}\n"
+        f"> └ **Size:** {file_size}\n"
+        f">\n"
+        f"> 🚀 **PROGRESS: {pct:.1f}%**\n"
+        f"> ├ 📊 **Total Links:** {total}\n"
+        f"> ├ ⚡ **Current:** {current}\n"
+        f"> └ ⏳ **Remaining:** {rem}"
     )
     if warning:
-        text += f"\n\n{warning}"
+        text += f"\n>\n> ⚠️ **{warning}**"
     return text
 
 async def cmd_exec(cmd, shell=False):
@@ -157,6 +165,7 @@ async def send_media(
         return False
         
     filename = os.path.basename(media_path)
+    file_size_str = get_readable_file_size(file_size) if file_size else "Unknown Size"
 
     async def _send_once():
         if media_type == "photo":
@@ -210,7 +219,7 @@ async def send_media(
             LOGGER(__name__).warning(f"FloodWait: Sleeping {wait_msg}")
             if progress_msg:
                 try:
-                    await progress_msg.edit(get_progress_text(filename, batch_stats, f"⏳ **Rate Limited:** Pausing for {wait_msg}..."))
+                    await progress_msg.edit(get_progress_text(filename, file_size_str, batch_stats, f"Rate Limited: Pausing for {wait_msg}..."))
                 except Exception:
                     pass
             await asyncio.sleep(wait_s + 1)
@@ -220,7 +229,7 @@ async def send_media(
             LOGGER(__name__).warning(f"TimeoutError: Request timed out. Retrying ({retry_count}/{max_retries})")
             if progress_msg:
                 try:
-                    await progress_msg.edit(get_progress_text(filename, batch_stats, f"⚠️ **Network Issue:** Retrying {retry_count}/{max_retries}..."))
+                    await progress_msg.edit(get_progress_text(filename, file_size_str, batch_stats, f"Network Issue: Retrying {retry_count}/{max_retries}..."))
                 except Exception:
                     pass
             await asyncio.sleep(5)
@@ -232,7 +241,7 @@ async def send_media(
             if retry_count < max_retries:
                 if progress_msg:
                     try:
-                        await progress_msg.edit(get_progress_text(filename, batch_stats, f"⚠️ **Network Issue:** Retrying {retry_count}/{max_retries}..."))
+                        await progress_msg.edit(get_progress_text(filename, file_size_str, batch_stats, f"Network Issue: Retrying {retry_count}/{max_retries}..."))
                     except Exception:
                         pass
                 await asyncio.sleep(3)
@@ -284,9 +293,13 @@ async def download_single_media(msg, semaphore, fetch_time=None, progress_msg=No
             wait_s = int(getattr(e, "value", 0) or 0)
             wait_msg = get_readable_time(wait_s)
             LOGGER(__name__).warning(f"FloodWait downloading: Sleeping {wait_msg}")
+            
             if progress_msg:
+                media_obj = msg.document or msg.video or msg.audio or msg.photo or msg.animation or msg.voice or msg.video_note or msg.sticker
+                pre_file_size = getattr(media_obj, "file_size", 0) if media_obj else 0
+                file_size_str = get_readable_file_size(pre_file_size)
                 try:
-                    await progress_msg.edit(get_progress_text(filename, batch_stats, f"⏳ **Rate Limited:** Pausing for {wait_msg}..."))
+                    await progress_msg.edit(get_progress_text(filename, file_size_str, batch_stats, f"Rate Limited: Pausing for {wait_msg}..."))
                 except Exception:
                     pass
             await asyncio.sleep(wait_s + 1)
@@ -349,7 +362,7 @@ async def processMediaGroup(chat_message, bot, message, semaphore, progress_msg=
                 LOGGER(__name__).warning(f"FloodWait sending group: Sleeping {wait_msg}")
                 if progress_msg:
                     try:
-                        await progress_msg.edit(get_progress_text("Media Group", batch_stats, f"⏳ **Rate Limited:** Pausing for {wait_msg}..."))
+                        await progress_msg.edit(get_progress_text("Media Group", "Multiple Files", batch_stats, f"Rate Limited: Pausing for {wait_msg}..."))
                     except Exception:
                         pass
                 await asyncio.sleep(wait_s + 1)
