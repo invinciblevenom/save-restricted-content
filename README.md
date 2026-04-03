@@ -45,29 +45,29 @@ Follow these steps for a quick cloud deployment:
    os.environ["BOT_TOKEN"] = "your_bot_token"
    os.environ["SESSION_STRING"] = "your_session_string"
 
- 5. Start the Bot: !python3 /content/save-restricted-content/main.py
+ 5. Start the Bot: `!python3 /content/save-restricted-content/main.py`
 
 
 ## 📖 Usage & Commands
-/start – Check if the bot is alive and view basic info.
+`/start` – Check if the bot is alive and view basic info.
 
-/help – Show detailed instructions and command syntax.
+`/help` – Show detailed instructions and command syntax.
 
-/dl <post_URL> (or just paste a link) – Fetch media/text from a single Telegram post.
+`/dl <post_URL>` (or just paste a link) – Fetch media/text from a single Telegram post.
 
-/batch <start_link> <end_link> [filter] – Fetch a range of posts. The bot will ask if you want to send the media to the Bot Chat or a Custom Channel.
+`/batch <start_link> <end_link> [filter]` – Fetch a range of posts. The bot will ask if you want to send the media to the Bot Chat or a Custom Channel.
 
 Filters available: video, doc, photo, audio, or leave blank for all.
 
-💡 Example: /batch https://t.me/mychannel/100 https://t.me/mychannel/120 video
+💡 Example: `/batch https://t.me/mychannel/100 https://t.me/mychannel/120 video`
 
 ⚠️ Note: If routing to a custom channel, the bot must be an Administrator with 'Post Messages' rights in the target channel.
 
-/stop – Safely cancel all active download/upload tasks.
+`/stop` – Cancel any active tasks
 
-/stats – View live system status (Uptime, Disk Space, RAM, CPU).
+`/stats` – View bot stats
 
-/logs – Download the logs.txt file for debugging.
+`/logs` – Downloads the logs.txt file
 
 🔒 Important: Your user session account MUST be a member of the source chat/channel you are trying to download from, or the bot will not be able to access the messages.
 
