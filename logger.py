@@ -6,7 +6,7 @@ logging.basicConfig(
     format="[%(asctime)s - %(levelname)s] - %(message)s",
     datefmt="%I:%M:%S %p",
     handlers=[
-        FileHandler("logs.txt", mode="w"),
+        FileHandler("logs.txt", mode="a"),
         StreamHandler(),
     ],
 )
