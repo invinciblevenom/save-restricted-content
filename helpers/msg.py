@@ -1,10 +1,45 @@
 import re
 from pyrogram.parser import Parser
 from pyrogram.utils import get_channel_id
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 PREFIX_NUM_UNDERSCORE_RE = re.compile(r'^\d+_')
 PREFIX_NUM_LETTER_RE = re.compile(r'^(\d+)\s*([a-zA-Z])')
 PREFIX_NUM_SPACE_RE = re.compile(r'^\d+ ')
+
+def clean_caption(caption: str) -> str:
+    if not caption:
+        return ""
+
+    def defang_link(match):
+        prefix = match.group(1)
+        rest = match.group(2)
+        return f"{prefix}[REMOVE]{rest}"
+
+    pattern = r'(https?://|www\.|t\.me/|telegram\.me/|chat\.whatsapp\.com/|@)(\w\S*)'
+    caption = re.sub(pattern, defang_link, caption, flags=re.IGNORECASE)
+    
+    return caption.strip()
+
+def extract_youtube_keyboard(reply_markup) -> InlineKeyboardMarkup | None:
+    if not reply_markup or not hasattr(reply_markup, 'inline_keyboard'):
+        return None
+
+    valid_buttons = []
+    yt_domains = ("youtube.com", "youtu.be")
+
+    for row in reply_markup.inline_keyboard:
+        new_row = []
+        for button in row:
+            if button.url:
+                if any(domain in button.url.lower() for domain in yt_domains):
+                    new_row.append(InlineKeyboardButton(text=button.text, url=button.url))
+        if new_row:
+            valid_buttons.append(new_row)
+
+    if valid_buttons:
+        return InlineKeyboardMarkup(valid_buttons)
+    return None
 
 async def get_parsed_msg(text, entities):
     return Parser.unparse(text, entities or [], is_html=False)

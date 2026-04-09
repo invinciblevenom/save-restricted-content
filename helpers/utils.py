@@ -165,7 +165,7 @@ async def get_video_thumbnail(video_file, duration):
     return output
 
 async def send_media(
-    bot, message, media_path, media_type, caption, progress_msg=None, batch_stats=None, target_chat_id=None
+    bot, message, media_path, media_type, caption, progress_msg=None, batch_stats=None, target_chat_id=None, reply_markup=None
 ):
     if target_chat_id is None:
         target_chat_id = message.chat.id
@@ -187,7 +187,8 @@ async def send_media(
             await bot.send_photo(
                 chat_id=target_chat_id,
                 photo=media_path,
-                caption=caption or ""
+                caption=caption or "",
+                reply_markup=reply_markup
             )
         elif media_type == "video":
             duration, _, _, width, height = await get_media_info(media_path)
@@ -202,7 +203,8 @@ async def send_media(
                 height=height,
                 thumb=thumb,
                 caption=caption or "",
-                supports_streaming=True
+                supports_streaming=True,
+                reply_markup=reply_markup
             )
         elif media_type == "audio":
             duration, artist, title, _, _ = await get_media_info(media_path)
@@ -212,13 +214,15 @@ async def send_media(
                 duration=duration,
                 performer=artist,
                 title=title,
-                caption=caption or ""
+                caption=caption or "",
+                reply_markup=reply_markup
             )
         elif media_type == "document":
             await bot.send_document(
                 chat_id=target_chat_id,
                 document=media_path,
-                caption=caption or ""
+                caption=caption or "",
+                reply_markup=reply_markup
             )
 
     max_retries = 3
