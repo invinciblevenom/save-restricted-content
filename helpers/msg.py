@@ -13,6 +13,8 @@ def getChatMsgID(link: str):
     if "?" in link:
         link = link.split("?")[0]
 
+    link = link.rstrip("/")
+
     linkps = link.split("/")
     chat_id, message_thread_id, message_id = None, None, None
     
