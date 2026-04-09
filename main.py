@@ -27,7 +27,9 @@ from helpers.files import (
 from helpers.msg import (
     getChatMsgID,
     get_file_name,
-    get_parsed_msg
+    get_parsed_msg,
+    clean_caption,
+    extract_youtube_keyboard
 )
 
 from config import PyroConf
@@ -142,6 +144,8 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
         parsed_caption = await get_parsed_msg(
             chat_message.caption or "", chat_message.caption_entities
         )
+        parsed_caption = clean_caption(parsed_caption)
+        safe_keyboard = extract_youtube_keyboard(chat_message.reply_markup)
 
         has_downloadable_media = (
             chat_message.document or chat_message.video or 
@@ -305,7 +309,8 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                     parsed_caption,
                     progress_msg,
                     batch_stats,
-                    target_chat_id
+                    target_chat_id,
+                    reply_markup=safe_keyboard
                 )
 
             if upload_success:
@@ -323,10 +328,14 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                     await progress_msg.edit(get_progress_text("Text Message", "N/A", batch_stats))
                 except Exception:
                     pass
+            
+            parsed_text = await get_parsed_msg(chat_message.text or "", chat_message.entities)
+            parsed_text = clean_caption(parsed_text)
+            
             await bot.send_message(
                 chat_id=target_chat_id,
-                text=chat_message.text.html, 
-                parse_mode=ParseMode.HTML, 
+                text=parsed_text, 
+                reply_markup=safe_keyboard,
                 disable_web_page_preview=True
             )
             LOGGER(__name__).info(f"Finished Processing: {post_url}")
@@ -547,7 +556,7 @@ async def execute_batch(bot: Client, original_msg: Message, job: dict, target_ch
                     elapsed = time() - rapid_window_start
                     if elapsed < RAPID_WINDOW_DURATION:
                         sleep_duration = RAPID_WINDOW_DURATION - elapsed
-                        LOGGER(__name__).warning(f"Speed Limit: Sleeping for {sleep_duration:.1f}s to avoid floodwait.")
+                        LOGGER(__name__).warning(f"Sleeping for {sleep_duration:.1f}s to avoid floodwait.")
                         try:
                             await loading.edit(f"📥 **Batch Processing...**\n> 🕘 Pausing for {int(sleep_duration)}s to avoid floodwait.")
                         except Exception:
