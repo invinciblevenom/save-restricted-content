@@ -466,8 +466,6 @@ async def execute_batch(bot: Client, original_msg: Message, job: dict, target_ch
 
     rapid_file_count = 0
     rapid_window_start = time()
-    RAPID_LIMIT = 10
-    RAPID_WINDOW_DURATION = 120
 
     for i in range(0, len(all_ids), chunk_size):
         chunk_ids = all_ids[i:i + chunk_size]
@@ -552,10 +550,10 @@ async def execute_batch(bot: Client, original_msg: Message, job: dict, target_ch
                         downloaded += 1
                         rapid_file_count += 1
 
-                if rapid_file_count >= RAPID_LIMIT:
+                if rapid_file_count >= PyroConf.RAPID_LIMIT:
                     elapsed = time() - rapid_window_start
-                    if elapsed < RAPID_WINDOW_DURATION:
-                        sleep_duration = RAPID_WINDOW_DURATION - elapsed
+                    if elapsed < PyroConf.RAPID_WINDOW_DURATION:
+                        sleep_duration = PyroConf.RAPID_WINDOW_DURATION - elapsed
                         LOGGER(__name__).warning(f"Sleeping for {sleep_duration:.1f}s to avoid floodwait.")
                         try:
                             await loading.edit(f"📥 **Batch Processing...**\n> 🕘 Pausing for {int(sleep_duration)}s to avoid floodwait.")

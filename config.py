@@ -12,3 +12,6 @@ class PyroConf(object):
     MAX_CONCURRENT_UPLOADS = int(getenv("MAX_CONCURRENT_UPLOADS", "1"))
     BATCH_SIZE = int(getenv("BATCH_SIZE", "1"))
     FLOOD_WAIT_DELAY = int(getenv("FLOOD_WAIT_DELAY", "5"))
+    
+    RAPID_LIMIT = int(getenv("RAPID_LIMIT", "10"))
+    RAPID_WINDOW_DURATION = int(getenv("RAPID_WINDOW_DURATION", "120"))
