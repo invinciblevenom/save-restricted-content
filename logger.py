@@ -1,12 +1,13 @@
 import logging
-from logging import FileHandler, StreamHandler
+from logging.handlers import RotatingFileHandler
+from logging import StreamHandler
 
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s - %(levelname)s] - %(message)s",
     datefmt="%I:%M:%S %p",
     handlers=[
-        FileHandler("logs.txt", mode="a"),
+        RotatingFileHandler("logs.txt", maxBytes=5 * 1024 * 1024, backupCount=2, mode="a"),
         StreamHandler(),
     ],
 )
