@@ -130,9 +130,10 @@ async def get_media_info(path):
             return 0, None, None, None, None
     return 0, None, None, None, None
 
-async def get_video_thumbnail(video_file, duration):
+async def get_video_thumbnail(video_file, duration, message_id=None):
     os.makedirs("Assets", exist_ok=True)
-    output = os.path.join("Assets", "video_thumb.jpg")
+    thumb_name = f"thumb_{message_id}.jpg" if message_id else "video_thumb.jpg"
+    output = os.path.join("Assets", thumb_name)
 
     if duration is None:
         duration = (await get_media_info(video_file))[0]
@@ -165,7 +166,7 @@ async def get_video_thumbnail(video_file, duration):
     return output
 
 async def send_media(
-    bot, message, media_path, media_type, caption, progress_msg=None, batch_stats=None, target_chat_id=None, reply_markup=None
+    bot, message, media_path, media_type, caption, progress_msg=None, batch_stats=None, target_chat_id=None, reply_markup=None, message_id=None
 ):
     if target_chat_id is None:
         target_chat_id = message.chat.id
@@ -194,7 +195,7 @@ async def send_media(
             duration, _, _, width, height = await get_media_info(media_path)
             if not duration: duration = 0
             if not width or not height: width, height = 640, 480
-            thumb = await get_video_thumbnail(media_path, duration)
+            thumb = await get_video_thumbnail(media_path, duration, message_id)
             await bot.send_video(
                 chat_id=target_chat_id,
                 video=media_path,
@@ -206,6 +207,11 @@ async def send_media(
                 supports_streaming=True,
                 reply_markup=reply_markup
             )
+            if thumb and os.path.exists(thumb):
+                try:
+                    os.remove(thumb)
+                except Exception:
+                    pass
         elif media_type == "audio":
             duration, artist, title, _, _ = await get_media_info(media_path)
             await bot.send_audio(
@@ -257,7 +263,7 @@ async def send_media(
             
         except Exception as e:
             LOGGER(__name__).error(f"Upload failed: {e} (Attempt {retry_count}/{max_retries})")
-            if retry_count < max_retries:
+            if retry_count <= max_retries:
                 if progress_msg:
                     try:
                         await progress_msg.edit(get_progress_text(filename, file_size_str, batch_stats, f"Network Issue: Retrying {retry_count}/{max_retries}..."))
