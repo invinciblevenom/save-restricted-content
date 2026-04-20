@@ -277,7 +277,7 @@ async def send_media(
     
     return False
 
-async def download_single_media(msg, semaphore, fetch_time=None, progress_msg=None, batch_stats=None):
+async def download_single_media(msg, user_client, semaphore, fetch_time=None, progress_msg=None, batch_stats=None):
     filename = get_file_name(msg.id, msg)
     
     download_path = get_download_path(msg.id, filename)
@@ -290,7 +290,7 @@ async def download_single_media(msg, semaphore, fetch_time=None, progress_msg=No
             async with semaphore:
                 if fetch_time and (time() - fetch_time) > 7200:
                     try:
-                        fresh_msg = await msg._client.get_messages(chat_id=msg.chat.id, message_ids=msg.id)
+                        fresh_msg = await user_client.get_messages(chat_id=msg.chat.id, message_ids=msg.id)
                         if fresh_msg and not fresh_msg.empty:
                             msg = fresh_msg
                             fetch_time = time()
@@ -339,7 +339,7 @@ async def download_single_media(msg, semaphore, fetch_time=None, progress_msg=No
 
     return ("skip", None, None)
 
-async def processMediaGroup(chat_message, bot, message, semaphore, progress_msg=None, batch_stats=None, target_chat_id=None):
+async def processMediaGroup(chat_message, user_client, bot, message, semaphore, progress_msg=None, batch_stats=None, target_chat_id=None):
     if target_chat_id is None:
         target_chat_id = message.chat.id
         
@@ -356,7 +356,7 @@ async def processMediaGroup(chat_message, bot, message, semaphore, progress_msg=
     download_tasks = []
     for msg in media_group_messages:
         if msg.photo or msg.video or msg.document or msg.audio:
-            download_tasks.append(download_single_media(msg, semaphore, group_fetch_time, progress_msg, batch_stats))
+            download_tasks.append(download_single_media(msg, user_client, semaphore, group_fetch_time, progress_msg, batch_stats))
 
     results = await asyncio.gather(*download_tasks, return_exceptions=True)
 
