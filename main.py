@@ -164,7 +164,7 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
             elif not progress_msg:
                 progress_msg = await message.reply(get_progress_text("Media Group", "Multiple Files"))
 
-            if not await processMediaGroup(chat_message, bot, message, dl_sem, progress_msg, batch_stats, target_chat_id):
+            if not await processMediaGroup(chat_message, user, bot, message, dl_sem, progress_msg, batch_stats, target_chat_id):
                 if progress_msg:
                     try:
                         await progress_msg.edit("❌ **Failed to process Media Group**")
@@ -310,7 +310,8 @@ async def handle_download(bot: Client, message: Message, post_url: str, pre_fetc
                     progress_msg,
                     batch_stats,
                     target_chat_id,
-                    reply_markup=safe_keyboard
+                    reply_markup=safe_keyboard,
+                    message_id=message_id
                 )
 
             if upload_success:
@@ -453,6 +454,8 @@ async def execute_batch(bot: Client, original_msg: Message, job: dict, target_ch
     except Exception:
         pass
 
+    LOGGER(__name__).info(f"Batch Process Started | Range: {start_id} to {end_id}")
+
     downloaded = skipped = failed = 0
     batch_tasks = []
     BATCH_SIZE = PyroConf.BATCH_SIZE
@@ -540,6 +543,7 @@ async def execute_batch(bot: Client, original_msg: Message, job: dict, target_ch
                         except Exception:
                             pass
                         await loading.delete()
+                        LOGGER(__name__).info(f"Batch Process Cancelled. Downloaded: {downloaded} | Skipped: {skipped} | Failed: {failed}")
                         return await original_msg.reply(
                             f"**❌ Batch canceled** after downloading `{downloaded}` posts."
                         )
@@ -580,6 +584,7 @@ async def execute_batch(bot: Client, original_msg: Message, job: dict, target_ch
     except Exception:
         pass
     await loading.delete()
+    LOGGER(__name__).info(f"Batch Process Completed | Downloaded: {downloaded} | Skipped: {skipped} | Failed: {failed}")
     await original_msg.reply(
         "> ✅Batch Process Completed!\n"
         "━━━━━━━━━━━━━━━━━━━\n"
