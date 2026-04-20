@@ -6,9 +6,8 @@ from logger import LOGGER
 SIZE_UNITS = ["B", "KB", "MB", "GB"]
 
 def get_download_path(folder_id: int, filename: str, root_dir: str = "downloads") -> str:
-    folder = os.path.join(root_dir, str(folder_id))
-    os.makedirs(folder, exist_ok=True)
-    return os.path.join(folder, filename)
+    os.makedirs(root_dir, exist_ok=True)
+    return os.path.join(root_dir, filename)
 
 
 def cleanup_download(path: str) -> None:
@@ -17,10 +16,6 @@ def cleanup_download(path: str) -> None:
             os.remove(path)
         if os.path.exists(path + ".temp"):
             os.remove(path + ".temp")
-
-        folder = os.path.dirname(path)
-        if os.path.isdir(folder) and not os.listdir(folder):
-            os.rmdir(folder)
 
     except Exception as e:
         LOGGER(__name__).error(f"Cleanup failed for {path}: {e}")
