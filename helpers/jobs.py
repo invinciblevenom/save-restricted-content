@@ -252,11 +252,11 @@ async def execute_batch(bot: Client, user: Client, original_msg: Message, job: d
                 except Exception: pass
                 await loading.delete()
                 return await original_msg.reply(
-                    "<blockquote>❗<b>Batch Process Canceled!</b>\n"
+                    "<blockquote>❗ <b>Batch Process Canceled!</b></blockquote>\n"
                     "━━━━━━━━━━━━━━━━━━━\n"
                     f"📥 <b>Downloaded</b>: {downloaded} post(s)\n"
                     f"⏭️ <b>Skipped</b>: {skipped} (filtered)\n"
-                    f"❌ <b>Failed</b>: {failed} error(s)</blockquote>",
+                    f"❌ <b>Failed</b>: {failed} error(s)",
                     parse_mode=ParseMode.HTML
                 )
             except FileReferenceExpired:
@@ -287,11 +287,11 @@ async def execute_batch(bot: Client, user: Client, original_msg: Message, job: d
     LOGGER(__name__).info(f"Batch Process Completed | Total: {downloaded} | Skipped: {skipped} | Failed: {failed}")
     
     await original_msg.reply(
-        "<blockquote>✅ <b>Batch Process Completed!</b>\n"
+        "<blockquote>✅ <b>Batch Process Completed!</b></blockquote>\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         f"📥 <b>Total</b>: {downloaded} post(s)\n"
         f"⏭️ <b>Skipped</b>: {skipped} (filtered)\n"
-        f"❌ <b>Failed</b>: {failed} error(s)</blockquote>",
+        f"❌ <b>Failed</b>: {failed} error(s)",
         parse_mode=ParseMode.HTML
     )
 
@@ -363,10 +363,10 @@ async def execute_autoforward(bot: Client, user: Client, original_msg: Message, 
     await loading.delete()
     LOGGER(__name__).info(f"Auto-Forward Completed | Total: {copied} | Skipped: {skipped} | Failed: {failed}")
     await original_msg.reply(
-        "<blockquote> ✅ <b>Auto-Forward Completed!</b>\n"
+        "<blockquote>✅ <b>Auto-Forward Completed!</b></blockquote>\n"
         "━━━━━━━━━━━━━━━━━━━\n"
         f"📥 <b>Total</b>: {copied} post(s)\n"
         f"⏭️ <b>Skipped</b>: {skipped}\n"
-        f"❌ <b>Failed</b>: {failed}</blockquote>",
+        f"❌ <b>Failed</b>: {failed}",
         parse_mode=ParseMode.HTML
     )
