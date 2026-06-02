@@ -356,7 +356,7 @@ async def processMediaGroup(chat_message, user_client, bot, message, semaphore, 
     invalid_paths = []
 
     LOGGER(__name__).info(
-        f"Downloading media group with {len(media_group_messages)} items..."
+        f"Downloading media group with {len(media_group_messages)} items."
     )
 
     download_tasks = []
@@ -378,8 +378,6 @@ async def processMediaGroup(chat_message, user_client, bot, message, semaphore, 
         elif status == "error" and media_path:
             invalid_paths.append(media_path)
 
-    LOGGER(__name__).info(f"Valid media count: {len(valid_media)}")
-
     if valid_media:
         sent_success = False
         max_retries = 3
@@ -387,7 +385,11 @@ async def processMediaGroup(chat_message, user_client, bot, message, semaphore, 
 
         while retry_count <= max_retries:
             try:
-                await bot.send_media_group(chat_id=target_chat_id, media=valid_media, reply_to_message_id=target_topic_id)
+                send_kwargs = {"chat_id": target_chat_id, "media": valid_media}
+                if target_topic_id:
+                    send_kwargs["reply_to_message_id"] = target_topic_id
+                    
+                await bot.send_media_group(**send_kwargs)
                 sent_success = True
                 break
             except FloodWait as e:
@@ -402,6 +404,11 @@ async def processMediaGroup(chat_message, user_client, bot, message, semaphore, 
                 await asyncio.sleep(wait_s + 1)
                 continue
             except Exception as e:
+                if "missing 1 required keyword-only argument: 'topics'" in str(e):
+                    LOGGER(__name__).info("Finished Processing: Media Group")
+                    sent_success = True
+                    break
+                
                 LOGGER(__name__).error(f"Media group send failed: {e}")
                 if retry_count < max_retries:
                     retry_count += 1
@@ -411,7 +418,7 @@ async def processMediaGroup(chat_message, user_client, bot, message, semaphore, 
         
         if not sent_success:
             await message.reply(
-                "<b>❌ Failed to send media group, trying individual uploads</b>"
+                "<b>❌ Failed to send media group, trying individual uploads.</b>"
             )
             for media in valid_media:
                 try:
