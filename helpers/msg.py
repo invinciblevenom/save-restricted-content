@@ -17,7 +17,7 @@ def clean_caption(caption: str) -> str:
         if re.search(r'(?:t\.me|telegram\.me)/.+/\d+', url, re.IGNORECASE):
             return url 
         return url.replace('.', '(dot)')
-        
+
     pattern = r'(?<!href=["\'])(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me|chat\.whatsapp\.com)\S+'
     caption = re.sub(pattern, defang_bare_link, caption, flags=re.IGNORECASE)
     
@@ -30,13 +30,13 @@ def apply_caption_rules(caption: str, rules: list) -> str:
     for rule in rules:
         if rule == "keep": 
             continue
-
+            
         lines = caption.replace('\r', '').split('\n')
         
         if rule == "rm_last":
             target_idx = -1
             for i in range(len(lines) - 1, -1, -1):
-                clean_line = re.sub(r'<[^>]+>', '', lines[i])
+                clean_line = re.sub(r'<[^>]+>', '', lines[i]) 
                 if re.search(r'[a-zA-Z0-9]', clean_line):
                     target_idx = i
                     break
@@ -56,10 +56,21 @@ def apply_caption_rules(caption: str, rules: list) -> str:
         elif rule.startswith("remove_text:"):
             text_to_remove = rule.split("remove_text:", 1)[1]
 
-            caption = caption.replace(text_to_remove, "")
+            def build_fuzzy_regex(target_str):
+                base = target_str.replace('\ufe0f', '')
+                escaped = [re.escape(c) for c in base]
+                return r'(?:\ufe0f|<[^>]+>)*'.join(escaped)
+
+            fuzzy_pattern = build_fuzzy_regex(text_to_remove)
+            caption = re.sub(fuzzy_pattern, '', caption)
+            
             if text_to_remove.startswith("@"):
                 alt_text = text_to_remove.replace("@", "(at)", 1)
-                caption = caption.replace(alt_text, "")
+                fuzzy_alt = build_fuzzy_regex(alt_text)
+                caption = re.sub(fuzzy_alt, '', caption)
+
+            for _ in range(3):
+                caption = re.sub(r'<([a-zA-Z0-9\-]+)[^>]*>(?:\s|\ufe0f)*</\1>', '', caption)
 
             caption = re.sub(r'[ \t]{2,}', ' ', caption)
             caption = re.sub(r' \.', '.', caption)
@@ -89,7 +100,6 @@ def extract_youtube_keyboard(reply_markup) -> InlineKeyboardMarkup | None:
     return None
 
 async def get_parsed_msg(chat_msg):
-
     if chat_msg.caption:
         return chat_msg.caption.html
     elif chat_msg.text:
