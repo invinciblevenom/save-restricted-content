@@ -63,8 +63,7 @@ async def trigger_caption_setup(bot: Client, user: Client, message: Message, job
         job["original_message_id"] = message.id 
         
         preview_caption = apply_caption_rules(sample_caption, job["caption_rules"])
-        display_cap = preview_caption[:300] + ("..." if len(preview_caption) > 300 else "")
-        if not display_cap: display_cap = "[Caption is empty]"
+        display_cap = preview_caption if preview_caption else "[Caption is empty]"
         
         text = (
             f"<b>Caption Preview:</b>\n\n<code>{display_cap}</code>\n\n"
@@ -318,8 +317,7 @@ async def handle_any_message(bot: Client, message: Message):
 
         rules_count = len(job["caption_rules"])
         preview_caption = apply_caption_rules(job['sample_caption'], job["caption_rules"])
-        display_cap = preview_caption[:300] + ("..." if len(preview_caption) > 300 else "")
-        if not display_cap: display_cap = "[Caption is empty]"
+        display_cap = preview_caption if preview_caption else "[Caption is empty]"
         
         text = (
             f"<b>Caption Preview:</b>\n\n<code>{display_cap}</code>\n\n"
