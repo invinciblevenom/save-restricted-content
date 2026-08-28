@@ -16,6 +16,7 @@ from helpers.msg import getChatMsgID, get_file_name, get_parsed_msg, clean_capti
 RUNNING_TASKS = set()
 download_semaphore = None
 upload_semaphore = None
+GLOBAL_CANCEL = asyncio.Event()
 
 def get_semaphores():
     global download_semaphore, upload_semaphore
@@ -37,6 +38,9 @@ def get_running_tasks():
     return RUNNING_TASKS
 
 async def handle_download(bot: Client, user: Client, message: Message, post_url: str, pre_fetched_msg: Message = None, progress_msg: Message = None, batch_stats: dict = None, target_chat_id: int | str = None, target_topic_id: int = None, caption_rules: list = None):
+    if GLOBAL_CANCEL.is_set():
+        raise asyncio.CancelledError()
+        
     if target_chat_id is None:
         target_chat_id = message.chat.id
         
@@ -94,13 +98,16 @@ async def handle_download(bot: Client, user: Client, message: Message, post_url:
 
         elif has_downloadable_media:
             filename = get_file_name(message_id, chat_message)
-            download_path = get_download_path(message_id, filename)
+            download_path = await get_download_path(message_id, filename)
 
             media_obj = chat_message.document or chat_message.video or chat_message.audio or chat_message.photo or chat_message.animation or chat_message.voice or chat_message.video_note or chat_message.sticker
             pre_file_size = getattr(media_obj, "file_size", 0) if media_obj else 0
             file_size_str = get_readable_file_size(pre_file_size)
 
             async with dl_sem:
+                if GLOBAL_CANCEL.is_set():
+                    raise asyncio.CancelledError()
+                    
                 LOGGER(__name__).info(f"Downloading media: {filename} (Size: {file_size_str})")
                 
                 if progress_msg and batch_stats:
@@ -119,9 +126,9 @@ async def handle_download(bot: Client, user: Client, message: Message, post_url:
                 except FileReferenceExpired:
                     raise
 
-            if not media_path or not os.path.exists(media_path): return
+            if not media_path or not await asyncio.to_thread(os.path.exists, media_path): return
             
-            actual_size = os.path.getsize(media_path)
+            actual_size = await asyncio.to_thread(os.path.getsize, media_path)
             
             if pre_file_size > 0 and actual_size < pre_file_size:
                 LOGGER(__name__).warning(f"File size mismatch. The file reference might have expired.")
@@ -132,6 +139,9 @@ async def handle_download(bot: Client, user: Client, message: Message, post_url:
             media_type = "photo" if chat_message.photo else "video" if chat_message.video else "audio" if chat_message.audio else "document"
             
             async with up_sem:
+                if GLOBAL_CANCEL.is_set():
+                    raise asyncio.CancelledError()
+                    
                 upload_success = await send_media(
                     bot, message, media_path, media_type, parsed_caption, progress_msg, batch_stats, target_chat_id, target_topic_id, reply_markup=safe_keyboard, message_id=message_id
                 )
@@ -170,7 +180,7 @@ async def handle_download(bot: Client, user: Client, message: Message, post_url:
             raise e
         await message.reply(f"**❌ {str(e)}**")
     finally:
-        if media_path: cleanup_download(media_path)
+        if media_path: await cleanup_download(media_path)
         elapsed = time() - task_start_time
         if elapsed < 2.0: await asyncio.sleep(2.0 - elapsed)
 
@@ -198,6 +208,9 @@ async def execute_batch(bot: Client, user: Client, original_msg: Message, job: d
     current_id = start_id
     
     while current_id <= end_id:
+        if GLOBAL_CANCEL.is_set():
+            raise asyncio.CancelledError()
+            
         chunk_end = min(current_id + 199, end_id)
         chunk_ids = list(range(current_id, chunk_end + 1))
         
@@ -213,6 +226,9 @@ async def execute_batch(bot: Client, user: Client, original_msg: Message, job: d
         ref_expired = False
 
         for chat_msg in messages:
+            if GLOBAL_CANCEL.is_set():
+                raise asyncio.CancelledError()
+                
             if not chat_msg or chat_msg.empty:
                 skipped += 1
                 batch_stats["processed"] += 1
@@ -313,6 +329,9 @@ async def execute_autoforward(bot: Client, user: Client, original_msg: Message, 
     all_ids = list(range(start_id, end_id + 1))
     
     for i in range(0, len(all_ids), 200):
+        if GLOBAL_CANCEL.is_set():
+            break
+            
         chunk_ids = all_ids[i:i + 200]
         try:
             messages = await user.get_messages(chat_id=start_chat, message_ids=chunk_ids)
@@ -322,6 +341,9 @@ async def execute_autoforward(bot: Client, user: Client, original_msg: Message, 
             continue
             
         for chat_msg in messages:
+            if GLOBAL_CANCEL.is_set():
+                break
+                
             if not chat_msg or chat_msg.empty:
                 skipped += 1
                 continue

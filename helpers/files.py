@@ -1,25 +1,26 @@
 import os
+import asyncio
 from typing import Optional
 
 from logger import LOGGER
 
 SIZE_UNITS = ["B", "KB", "MB", "GB"]
 
-def get_download_path(folder_id: int, filename: str, root_dir: str = "downloads") -> str:
-    os.makedirs(root_dir, exist_ok=True)
+async def get_download_path(folder_id: int, filename: str, root_dir: str = "downloads") -> str:
+    await asyncio.to_thread(os.makedirs, root_dir, exist_ok=True)
     return os.path.join(root_dir, filename)
 
-
-def cleanup_download(path: str) -> None:
-    try:
-        if os.path.exists(path):
-            os.remove(path)
-        if os.path.exists(path + ".temp"):
-            os.remove(path + ".temp")
-
-    except Exception as e:
-        LOGGER(__name__).error(f"Cleanup failed for {path}: {e}")
-
+async def cleanup_download(path: str) -> None:
+    def _clean():
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            if os.path.exists(path + ".temp"):
+                os.remove(path + ".temp")
+        except Exception as e:
+            LOGGER(__name__).error(f"Cleanup failed for {path}: {e}")
+            
+    await asyncio.to_thread(_clean)
 
 def get_readable_file_size(size_in_bytes: Optional[float]) -> str:
     if size_in_bytes is None or size_in_bytes < 0:
@@ -31,7 +32,6 @@ def get_readable_file_size(size_in_bytes: Optional[float]) -> str:
         size_in_bytes /= 1024
 
     return "File too large"
-
 
 def get_readable_time(seconds: int) -> str:
     result = ""
@@ -50,7 +50,6 @@ def get_readable_time(seconds: int) -> str:
     seconds = int(seconds)
     result += f"{seconds}s"
     return result
-
 
 async def fileSizeLimit(file_size, message, action_type="download", is_premium=False):
     MAX_FILE_SIZE = 2 * 2097152000 if is_premium else 2097152000

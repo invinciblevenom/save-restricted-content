@@ -129,7 +129,7 @@ async def get_media_info(path):
     return 0, None, None, None, None
 
 async def get_video_thumbnail(video_file, duration, message_id=None):
-    os.makedirs("Assets", exist_ok=True)
+    await asyncio.to_thread(os.makedirs, "Assets", exist_ok=True)
     thumb_name = f"thumb_{message_id}.jpg" if message_id else "video_thumb.jpg"
     output = os.path.join("Assets", thumb_name)
 
@@ -140,9 +140,9 @@ async def get_video_thumbnail(video_file, duration, message_id=None):
     
     duration //= 2
 
-    if os.path.exists(output):
+    if await asyncio.to_thread(os.path.exists, output):
         try:
-            os.remove(output)
+            await asyncio.to_thread(os.remove, output)
         except:
             pass
 
@@ -155,7 +155,7 @@ async def get_video_thumbnail(video_file, duration, message_id=None):
     try:
         _, err, code = await cmd_exec(cmd)
         
-        if code != 0 or not os.path.exists(output):
+        if code != 0 or not await asyncio.to_thread(os.path.exists, output):
             LOGGER(__name__).warning(f"Thumbnail generation failed for {os.path.basename(video_file)}: {err}")
             return None
     except Exception as e:
@@ -170,7 +170,7 @@ async def send_media(
         target_chat_id = message.chat.id
         
     try:
-        file_size = os.path.getsize(media_path)
+        file_size = await asyncio.to_thread(os.path.getsize, media_path)
     except OSError as e:
         LOGGER(__name__).error(f"File not found or inaccessible: {e}")
         return False
@@ -209,9 +209,9 @@ async def send_media(
                 reply_markup=reply_markup,
                 reply_to_message_id=target_topic_id
             )
-            if thumb and os.path.exists(thumb):
+            if thumb and await asyncio.to_thread(os.path.exists, thumb):
                 try:
-                    os.remove(thumb)
+                    await asyncio.to_thread(os.remove, thumb)
                 except Exception:
                     pass
         elif media_type == "audio":
@@ -283,7 +283,7 @@ async def send_media(
 
 async def download_single_media(msg, user_client, semaphore, progress_msg=None, batch_stats=None, caption_rules=None):
     filename = get_file_name(msg.id, msg)
-    download_path = get_download_path(msg.id, filename)
+    download_path = await get_download_path(msg.id, filename)
     
     max_retries = 3
     retry_count = 1
@@ -298,8 +298,8 @@ async def download_single_media(msg, user_client, semaphore, progress_msg=None, 
             media_obj = msg.document or msg.video or msg.audio or msg.photo or msg.animation or msg.voice or msg.video_note or msg.sticker
             pre_file_size = getattr(media_obj, "file_size", 0) if media_obj else 0
             
-            if media_path and os.path.exists(media_path):
-                actual_size = os.path.getsize(media_path)
+            if media_path and await asyncio.to_thread(os.path.exists, media_path):
+                actual_size = await asyncio.to_thread(os.path.getsize, media_path)
                 if pre_file_size > 0 and actual_size < pre_file_size:
                     LOGGER(__name__).warning(f"Group File size mismatch. The file reference might have expired.")
                     raise FileReferenceExpired()
@@ -434,9 +434,9 @@ async def processMediaGroup(chat_message, user_client, bot, message, semaphore, 
                     await message.reply(f"Failed to upload individual media: {e}")
 
         for path in temp_paths + invalid_paths:
-            cleanup_download(path)
+            await cleanup_download(path)
         return True
 
     for path in invalid_paths:
-        cleanup_download(path)
+        await cleanup_download(path)
     return False

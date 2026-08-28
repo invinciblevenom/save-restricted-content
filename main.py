@@ -13,7 +13,7 @@ from logger import LOGGER
 
 from helpers.files import get_readable_file_size, get_readable_time
 from helpers.msg import getChatMsgID, get_parsed_msg, apply_caption_rules
-from helpers.jobs import execute_batch, execute_autoforward, handle_download, track_task, get_running_tasks
+from helpers.jobs import execute_batch, execute_autoforward, handle_download, track_task, get_running_tasks, GLOBAL_CANCEL
 from helpers.keyboards import get_start_keyboard, get_caption_keyboard, get_filter_keyboard
 
 bot = Client(
@@ -239,8 +239,7 @@ async def caption_rule_callback(bot: Client, callback_query: CallbackQuery):
     
     rules_count = len(job["caption_rules"])
     preview_caption = apply_caption_rules(job['sample_caption'], job["caption_rules"])
-    display_cap = preview_caption[:300] + ("..." if len(preview_caption) > 300 else "")
-    if not display_cap: display_cap = "[Caption is empty]"
+    display_cap = preview_caption if preview_caption else "[Caption is empty]"
     
     text = (
         f"<b>Caption Preview:</b>\n\n<code>{display_cap}</code>\n\n"
@@ -373,12 +372,11 @@ async def logs(_, message: Message):
 
 @bot.on_message(filters.command("stop") & filters.private)
 async def cancel_all_tasks(_, message: Message):
-    cancelled = 0
-    for task in list(get_running_tasks()):
-        if not task.done():
-            task.cancel()
-            cancelled += 1
-    await message.reply(f"<b>Cancelled {cancelled} running task(s).</b>", parse_mode=ParseMode.HTML)
+    GLOBAL_CANCEL.set()
+    cancelled = len(list(get_running_tasks()))
+    await message.reply(f"<b>Initiated shutdown for {cancelled} running task(s).</b>", parse_mode=ParseMode.HTML)
+    await asyncio.sleep(2)
+    GLOBAL_CANCEL.clear()
 
 if __name__ == "__main__":
     if os.path.exists("downloads"):
