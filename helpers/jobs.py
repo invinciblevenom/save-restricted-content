@@ -69,9 +69,9 @@ async def handle_download(bot: Client, user: Client, message: Message, post_url:
                 return
 
         parsed_caption = await get_parsed_msg(chat_message)
-        parsed_caption = clean_caption(parsed_caption)
         if caption_rules:
             parsed_caption = apply_caption_rules(parsed_caption, caption_rules)
+        parsed_caption = clean_caption(parsed_caption)
             
         safe_keyboard = extract_youtube_keyboard(chat_message.reply_markup)
         has_downloadable_media = bool(chat_message.document or chat_message.video or chat_message.audio or chat_message.photo or chat_message.animation or chat_message.voice or chat_message.video_note or chat_message.sticker)
@@ -157,6 +157,8 @@ async def handle_download(bot: Client, user: Client, message: Message, post_url:
                 batch_stats["processed"] += 1
             
             parsed_text = await get_parsed_msg(chat_message)
+            if caption_rules:
+                parsed_text = apply_caption_rules(parsed_text, caption_rules)
             parsed_text = clean_caption(parsed_text)
             
             try:
@@ -328,6 +330,8 @@ async def execute_autoforward(bot: Client, user: Client, original_msg: Message, 
     copied = skipped = failed = 0
     all_ids = list(range(start_id, end_id + 1))
     
+    processed_media_groups = set()
+    
     for i in range(0, len(all_ids), 200):
         if GLOBAL_CANCEL.is_set():
             break
@@ -348,13 +352,55 @@ async def execute_autoforward(bot: Client, user: Client, original_msg: Message, 
                 skipped += 1
                 continue
                 
+            if chat_msg.media_group_id:
+                if chat_msg.media_group_id in processed_media_groups:
+                    skipped += 1
+                    continue
+                processed_media_groups.add(chat_msg.media_group_id)
+                
+                try:
+                    mg_messages = await user.get_media_group(start_chat, chat_msg.id)
+                    captions = []
+                    for m in mg_messages:
+                        raw_text = m.caption or m.text or ""
+                        if raw_text:
+                            custom_caption = await get_parsed_msg(m)
+                            if caption_rules:
+                                custom_caption = apply_caption_rules(custom_caption, caption_rules)
+                            custom_caption = clean_caption(custom_caption)
+                            captions.append(custom_caption)
+                        else:
+                            captions.append("")
+                    
+                    kwargs = {
+                        "chat_id": target_chat, 
+                        "from_chat_id": start_chat, 
+                        "message_id": chat_msg.id,
+                        "captions": captions
+                    }
+                    if target_topic:
+                        kwargs["reply_to_message_id"] = target_topic
+                        
+                    await user.copy_media_group(**kwargs)
+                    copied += len(mg_messages)
+                    await asyncio.sleep(1.5) 
+                except FloodWait as e:
+                    wait_s = int(getattr(e, "value", 0) or 0)
+                    await asyncio.sleep(wait_s + 1)
+                    failed += len(mg_messages) if 'mg_messages' in locals() else 1
+                except Exception as e:
+                    LOGGER(__name__).error(f"Auto-forward media group failed for {chat_msg.id}: {e}")
+                    failed += len(mg_messages) if 'mg_messages' in locals() else 1
+                continue
+                
             try:
                 raw_text = chat_msg.caption or chat_msg.text or ""
                 
                 if raw_text:
                     custom_caption = await get_parsed_msg(chat_msg)
+                    if caption_rules:
+                        custom_caption = apply_caption_rules(custom_caption, caption_rules)
                     custom_caption = clean_caption(custom_caption)
-                    custom_caption = apply_caption_rules(custom_caption, caption_rules)
                 else:
                     custom_caption = ""
                 
@@ -389,6 +435,44 @@ async def execute_autoforward(bot: Client, user: Client, original_msg: Message, 
         "━━━━━━━━━━━━━━━━━━━\n"
         f"📥 <b>Total</b>: {copied} post(s)\n"
         f"⏭️ <b>Skipped</b>: {skipped}\n"
+        f"❌ <b>Failed</b>: {failed}",
+        parse_mode=ParseMode.HTML
+    )
+
+async def execute_delete(bot: Client, user: Client, original_msg: Message, job: dict):
+    start_chat = job["start_chat"]
+    start_id = job["start_id"]
+    end_id = job["end_id"]
+    
+    loading = await original_msg.reply(f"🗑️ <b>Started Batch Deletion...</b>")
+    LOGGER(__name__).info(f"Batch Delete Process Started | Range: {start_id} to {end_id}")
+    deleted = 0
+    failed = 0
+    
+    all_ids = list(range(start_id, end_id + 1))
+    
+    for i in range(0, len(all_ids), 99):
+        if GLOBAL_CANCEL.is_set():
+            break
+            
+        chunk_ids = all_ids[i:i + 99]
+        try:
+            res = await user.delete_messages(chat_id=start_chat, message_ids=chunk_ids)
+            deleted += res
+            await asyncio.sleep(1.5)
+        except FloodWait as e:
+            wait_s = int(getattr(e, "value", 0) or 0)
+            await asyncio.sleep(wait_s + 1)
+        except Exception as e:
+            LOGGER(__name__).error(f"Batch delete failed: {e}")
+            failed += len(chunk_ids)
+            
+    await loading.delete()
+    LOGGER(__name__).info(f"Batch Delete Completed | Total: {deleted} | Failed: {failed}")
+    await original_msg.reply(
+        "<blockquote>✅ <b>Batch Deletion Completed!</b></blockquote>\n"
+        "━━━━━━━━━━━━━━━━━━━\n"
+        f"🗑️ <b>Deleted</b>: {deleted} message(s)\n"
         f"❌ <b>Failed</b>: {failed}",
         parse_mode=ParseMode.HTML
     )
