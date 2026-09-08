@@ -13,7 +13,7 @@ from logger import LOGGER
 
 from helpers.files import get_readable_file_size, get_readable_time
 from helpers.msg import getChatMsgID, get_parsed_msg, apply_caption_rules
-from helpers.jobs import execute_batch, execute_autoforward, handle_download, track_task, get_running_tasks, GLOBAL_CANCEL
+from helpers.jobs import execute_batch, execute_autoforward, handle_download, track_task, get_running_tasks, GLOBAL_CANCEL, execute_delete
 from helpers.keyboards import get_start_keyboard, get_caption_keyboard, get_filter_keyboard
 
 bot = Client(
@@ -76,8 +76,10 @@ async def trigger_caption_setup(bot: Client, user: Client, message: Message, job
     else:
         job["caption_rules"] = ["keep"]
         if job["job_type"] == "batch":
+            GLOBAL_CANCEL.clear()
             await track_task(execute_batch(bot, user, job["original_message"], job))
         else:
+            GLOBAL_CANCEL.clear()
             await track_task(execute_autoforward(bot, user, job["original_message"], job))
 
 @bot.on_message(filters.command("start") & filters.private)
@@ -102,6 +104,8 @@ async def help_command(_, message: Message):
         "• Type <code>/batch &lt;start_url&gt;</code> to initiate a batch download.\n\n"
         "⚡ <b>Auto-Forwarding</b>\n"
         "• Type <code>/autoforward &lt;from_chat_link&gt;</code> to initiate autoforward process.\n\n"
+        "🗑️ <b>Batch Deletion</b>\n"
+        "• Type <code>/delete &lt;start_link&gt;</code> to bulk delete posts inside a chat.\n\n"
         "⚙️ <b>System Controls</b>\n"
         "• <code>/stop</code> - Cancel active tasks\n"
         "• <code>/stats</code> - Check bot performance\n"
@@ -119,6 +123,15 @@ async def batch_command(bot: Client, message: Message):
     await message.reply("🔗 Send the <b>ending post link</b> to establish the range.", parse_mode=ParseMode.HTML)
     WAITING_FOR_DEST[message.from_user.id] = {"action": "wait_batch_end"}
 
+@bot.on_message(filters.command("delete") & filters.private)
+async def delete_command(bot: Client, message: Message):
+    args = message.text.split()
+    if len(args) < 2 or not args[1].startswith("https://t.me/"):
+        return await message.reply("🚀 <b>Batch Delete</b>\n\n<blockquote><code>/delete start_link</code></blockquote>", parse_mode=ParseMode.HTML)
+    LINK_CACHE[message.from_user.id] = args[1]
+    await message.reply("🔗 Send the <b>ending post link</b> to establish the range.", parse_mode=ParseMode.HTML)
+    WAITING_FOR_DEST[message.from_user.id] = {"action": "wait_delete_end"}
+
 @bot.on_callback_query(filters.regex(r"^menu_(single|batch|auto)$"))
 async def main_menu_callback(bot: Client, callback_query: CallbackQuery):
     action = callback_query.matches[0].group(1)
@@ -131,6 +144,7 @@ async def main_menu_callback(bot: Client, callback_query: CallbackQuery):
     await callback_query.message.delete()
     
     if action == "single":
+        GLOBAL_CANCEL.clear()
         await track_task(handle_download(bot, user, callback_query.message, link))
         LINK_CACHE.pop(user_id, None)
         
@@ -228,8 +242,10 @@ async def caption_rule_callback(bot: Client, callback_query: CallbackQuery):
         WAITING_FOR_CAPTION_RULE.pop(user_id)
         await callback_query.message.delete()
         if job["job_type"] == "batch":
+            GLOBAL_CANCEL.clear()
             await track_task(execute_batch(bot, user, job["original_message"], job))
         else:
+            GLOBAL_CANCEL.clear()
             await track_task(execute_autoforward(bot, user, job["original_message"], job))
         return
         
@@ -251,7 +267,7 @@ async def caption_rule_callback(bot: Client, callback_query: CallbackQuery):
         await callback_query.message.edit_text(text, reply_markup=get_caption_keyboard(job['original_message_id']), parse_mode=ParseMode.HTML)
     except Exception: pass
 
-@bot.on_message(filters.private & filters.text & ~filters.command(["start", "help", "stats", "logs", "stop", "autoforward", "batch"]))
+@bot.on_message(filters.private & filters.text & ~filters.command(["start", "help", "stats", "logs", "stop", "autoforward", "batch", "delete"]))
 async def handle_any_message(bot: Client, message: Message):
     user_id = message.from_user.id
 
@@ -293,6 +309,17 @@ async def handle_any_message(bot: Client, message: Message):
                 }
                 WAITING_FOR_DEST[message.from_user.id] = auto_job
                 await message.reply("🔗 Send a post link from the target channel/topic.")
+                
+            elif job["action"] == "wait_delete_end":
+                delete_job = {
+                    "start_chat": start_chat,
+                    "start_id": start_id,
+                    "end_id": end_id,
+                    "job_type": "delete",
+                    "original_message": message
+                }
+                GLOBAL_CANCEL.clear()
+                await track_task(execute_delete(bot, user, message, delete_job))
             return
 
         try:
@@ -375,8 +402,6 @@ async def cancel_all_tasks(_, message: Message):
     GLOBAL_CANCEL.set()
     cancelled = len(list(get_running_tasks()))
     await message.reply(f"<b>Initiated shutdown for {cancelled} running task(s).</b>", parse_mode=ParseMode.HTML)
-    await asyncio.sleep(2)
-    GLOBAL_CANCEL.clear()
 
 if __name__ == "__main__":
     if os.path.exists("downloads"):
